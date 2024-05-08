@@ -1,35 +1,49 @@
 baselines
 ==============================
-### Installation
+### Installation Done
 
-The `habitat_baselines` sub-package is NOT included upon installation by default. To install `habitat_baselines`, use the following command instead:
-```bash
-pip install -e habitat-lab
-pip install -e habitat-baselines
-```
-This will also install additional requirements for each sub-module in `habitat_baselines/`, which are specified in `requirements.txt` files located in the sub-module directory.
+[//]: # ()
+[//]: # (The `habitat_baselines` sub-package is NOT included upon installation by default. To install `habitat_baselines`, use the following command instead:)
 
+[//]: # (```bash)
+
+[//]: # (pip install -e habitat-lab)
+
+[//]: # (pip install -e habitat-baselines)
+
+[//]: # (```)
+
+[//]: # (This will also install additional requirements for each sub-module in `habitat_baselines/`, which are specified in `requirements.txt` files located in the sub-module directory.)
+
+[//]: # ()
 
 ### Reinforcement Learning (RL)
 
-**Proximal Policy Optimization (PPO)**
+**Train with Proximal Policy Optimization (PPO)**
 
-**paper**: [https://arxiv.org/abs/1707.06347](https://arxiv.org/abs/1707.06347)
+[//]: # ()
+[//]: # (**paper**: [https://arxiv.org/abs/1707.06347]&#40;https://arxiv.org/abs/1707.06347&#41;)
 
-**code**: The PPO implementation is based on
-[pytorch-a2c-ppo-acktr](https://github.com/ikostrikov/pytorch-a2c-ppo-acktr).
+[//]: # ()
+[//]: # (**code**: The PPO implementation is based on)
 
-**dependencies**: A recent version of pytorch, for installing refer to [pytorch.org](https://pytorch.org/)
+[//]: # ([pytorch-a2c-ppo-acktr]&#40;https://github.com/ikostrikov/pytorch-a2c-ppo-acktr&#41;.)
 
-For training on sample data please follow steps in the repository README. You should download the sample [test scene data](http://dl.fbaipublicfiles.com/habitat/habitat-test-scenes.zip), extract it under the main repo (`habitat-lab/`, extraction will create a data folder at `habitat-lab/data`) and run the below training command.
+[//]: # ()
+[//]: # (**dependencies**: A recent version of pytorch, for installing refer to [pytorch.org]&#40;https://pytorch.org/&#41;)
 
-**train**:
+[//]: # (For training on sample data please follow steps in the repository README. You should download the sample [test scene data]&#40;http://dl.fbaipublicfiles.com/habitat/habitat-test-scenes.zip&#41;, extract it under the main repo &#40;`habitat-lab/`, extraction will create a data folder at `habitat-lab/data`&#41; and run the below training command.)
+
+**训练**:
 ```bash
 python -u -m habitat_baselines.run \
   --config-name=pointnav/ppo_pointnav_example.yaml
 ```
 
-You can reduce training time by changing the trainer from the default implement to [VER](rl/ver/README.md) by
+**更快的训练-新的trainner**:
+
+You can reduce training time by changing the trainer from the default implement
+to [VER](rl/ver/README.md) by
 setting `trainer_name` to `"ver"` in either the config or via the command line.
 
 ```bash
@@ -38,22 +52,41 @@ python -u -m habitat_baselines.run \
   habitat_baselines.trainer_name=ver
 ```
 
-**test**:
+**测试**:
 ```bash
 python -u -m habitat_baselines.run \
   --config-name=pointnav/ppo_pointnav_example.yaml \
   habitat_baselines.evaluate=True
 ```
 
-We also provide trained RGB, RGBD, and Depth PPO  models for MatterPort3D and Gibson.
-To use them download pre-trained pytorch models from [link](https://dl.fbaipublicfiles.com/habitat/data/baselines/v1/habitat_baselines_v2.zip) and unzip and specify model path [here](agents/ppo_agents.py#L151).
+**pre-trained model**:
 
-The `habitat_baselines/config/pointnav/ppo_pointnav.yaml` config has better hyperparameters for large scale training and loads the [Gibson PointGoal Navigation Dataset](/README.md#datasets) instead of the test scenes.
-Change the `/benchmark/nav/pointnav: pointnav_gibson` in `habitat_baselines/config/pointnav/ppo_pointnav.yaml` to `/benchmark/nav/pointnav: pointnav_mp3d` in the defaults list for training on [MatterPort3D PointGoal Navigation Dataset](/README.md#datasets).
+We also provide trained RGB, RGBD, and Depth PPO  models for MatterPort3D and Gibson.
+To use them download pre-trained pytorch models from [link](https://dl.fbaipublicfiles.com/habitat/data/baselines/v1/habitat_baselines_v2.zip)
+and unzip and specify model path [here](agents/ppo_agents.py#L151).
+
+**更多配置**:
+
+这个ppo默认是在test_scene里面训练，可以在另一个数据集上面训练
+
+The `habitat_baselines/config/pointnav/ppo_pointnav.yaml` config has better hyperparameters
+for large scale training and loads the [Gibson PointGoal Navigation Dataset](/README.md#datasets) instead
+of the test scenes.
+Change the `/benchmark/nav/pointnav: pointnav_gibson` in `habitat_baselines/config/pointnav/ppo_pointnav.yaml`
+to `/benchmark/nav/pointnav: pointnav_mp3d` in the defaults list for
+training on [MatterPort3D PointGoal Navigation Dataset](/README.md#datasets).
 
 ### Hierarchical Reinforcement Learning (HRL)
 
-We provide a two-layer hierarchical policy class, consisting of a low-level skill that moves the robot, and a high-level policy that reasons about which low-level skill to use in the current state. This can be especially powerful in long-horizon mobile manipulation tasks, like those introduced in [Habitat2.0](https://arxiv.org/abs/2106.14405). Both the low- and high- level can be either learned or an oracle. For oracle high-level we use [PDDL](https://planning.wiki/guide/whatis/pddl), and for oracle low-level we use instantaneous transitions, with the environment set to the final desired state. Additionally, for navigation, we provide an oracle navigation skill that uses A-star and the map of the environment to move the robot to its goal.
+分层的策略：比如global planner用RL，local planner用 A-star
+
+We provide a two-layer hierarchical policy class, consisting of a low-level skill that moves the robot, and a high-level policy
+that reasons about which low-level skill to use in the current state. This can be especially powerful in long-horizon
+mobile manipulation tasks, like those introduced in [Habitat2.0](https://arxiv.org/abs/2106.14405). Both the low- and high- level can be either
+learned or an oracle. For oracle high-level we use [PDDL](https://planning.wiki/guide/whatis/pddl), and for oracle low-level we use instantaneous transitions,
+with the environment set to the final desired state.
+
+Additionally, for navigation, we provide an oracle navigation skill that uses A-star and the map of the environment to move the robot to its goal.
 
 To run the following examples, you need the [ReplicaCAD dataset](https://github.com/facebookresearch/habitat-sim/blob/main/DATASETS.md#replicacad).
 
@@ -76,6 +109,13 @@ python -u -m habitat_baselines.run \
 To change the task (like set table) that you train your skills on, you can change the line `/habitat/task/rearrange: rearrange_easy` to `/habitat/task/rearrange: set_table` in the defaults of your config.
 
 # Habitat-3.0 Multi-Agent Training
+
+可以看一下这个[原始论文](https://arxiv.org/pdf/2310.13724)，里面总共
+介绍了两个新的任务，一个是social navigation，一个是cooperative manipulation。
+1. social navigation: 一个机器人要找到一个人，然后跟着这个人走。
+2. cooperative manipulation: 一个机器人和一个人要一起完成一个任务，比如搬一个箱子。
+（在第二个任务里，人的policy是否需要训练？）（存在evaluate on unseen human policy）
+
 First download the necessary data with `python -m habitat_sim.utils.datasets_download --uids hssd-hab hab3-episodes habitat_humanoids hab3_bench_assets`.
 
 ## Social Navigation
