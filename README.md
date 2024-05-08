@@ -23,156 +23,264 @@ Towards this goal, Habitat-Lab is designed to support the following features:
 
 Habitat-Lab uses [`Habitat-Sim`](https://github.com/facebookresearch/habitat-sim) as the core simulator. For documentation refer [here](https://aihabitat.org/docs/habitat-lab/).
 
-[![Habitat Demo](https://img.shields.io/static/v1?label=WebGL&message=Try%20AI%20Habitat%20In%20Your%20Browser%20&color=blue&logo=webgl&labelColor=%23990000&style=for-the-badge&link=https://aihabitat.org/demo)](https://aihabitat.org/demo)
+[//]: # ()
+[//]: # ([![Habitat Demo]&#40;https://img.shields.io/static/v1?label=WebGL&message=Try%20AI%20Habitat%20In%20Your%20Browser%20&color=blue&logo=webgl&labelColor=%23990000&style=for-the-badge&link=https://aihabitat.org/demo&#41;]&#40;https://aihabitat.org/demo&#41;)
 
-<p align="center">
-  <img src="res/img/habitat3.gif" height="400">
+[//]: # ()
+[//]: # (<p align="center">)
 
-</p>
+[//]: # (  <img src="res/img/habitat3.gif" height="400">)
+
+[//]: # ()
+[//]: # (</p>)
 
 ---
 
-## Table of contents
-- [Habitat-Lab](#habitat-lab)
-  - [Table of contents](#table-of-contents)
-  - [Citing Habitat](#citing-habitat)
-  - [Installation](#installation)
-  - [Testing](#testing)
-  - [Debugging an environment issue](#debugging-an-environment-issue)
-  - [Documentation](#documentation)
-  - [Docker Setup](#docker-setup)
-    - [Questions?](#questions)
-  - [Datasets](#datasets)
-  - [Baselines](#baselines)
-  - [ROS-X-Habitat](#ros-x-habitat)
-  - [License](#license)
+[//]: # ()
+[//]: # (## Table of contents)
+
+[//]: # (- [Habitat-Lab]&#40;#habitat-lab&#41;)
+
+[//]: # (  - [Table of contents]&#40;#table-of-contents&#41;)
+
+[//]: # (  - [Citing Habitat]&#40;#citing-habitat&#41;)
+
+[//]: # (  - [Installation]&#40;#installation&#41;)
+
+[//]: # (  - [Testing]&#40;#testing&#41;)
+
+[//]: # (  - [Debugging an environment issue]&#40;#debugging-an-environment-issue&#41;)
+
+[//]: # (  - [Documentation]&#40;#documentation&#41;)
+
+[//]: # (  - [Docker Setup]&#40;#docker-setup&#41;)
+
+[//]: # (    - [Questions?]&#40;#questions&#41;)
+
+[//]: # (  - [Datasets]&#40;#datasets&#41;)
+
+[//]: # (  - [Baselines]&#40;#baselines&#41;)
+
+[//]: # (  - [ROS-X-Habitat]&#40;#ros-x-habitat&#41;)
+
+[//]: # (  - [License]&#40;#license&#41;)
 
 
-## Citing Habitat
-If you use the Habitat platform in your research, please cite the [Habitat 1.0](https://arxiv.org/abs/1904.01201), [Habitat 2.0](https://arxiv.org/abs/2106.14405), and [Habitat 3.0](https://arxiv.org/abs/2310.13724) papers:
+[//]: # (## Citing Habitat)
 
-```
-@misc{puig2023habitat3,
-      title  = {Habitat 3.0: A Co-Habitat for Humans, Avatars and Robots},
-      author = {Xavi Puig and Eric Undersander and Andrew Szot and Mikael Dallaire Cote and Ruslan Partsey and Jimmy Yang and Ruta Desai and Alexander William Clegg and Michal Hlavac and Tiffany Min and Theo Gervet and Vladimír Vondruš and Vincent-Pierre Berges and John Turner and Oleksandr Maksymets and Zsolt Kira and Mrinal Kalakrishnan and Jitendra Malik and Devendra Singh Chaplot and Unnat Jain and Dhruv Batra and Akshara Rai and Roozbeh Mottaghi},
-      year={2023},
-      archivePrefix={arXiv},
-}
+[//]: # (If you use the Habitat platform in your research, please cite the [Habitat 1.0]&#40;https://arxiv.org/abs/1904.01201&#41;, [Habitat 2.0]&#40;https://arxiv.org/abs/2106.14405&#41;, and [Habitat 3.0]&#40;https://arxiv.org/abs/2310.13724&#41; papers:)
 
-@inproceedings{szot2021habitat,
-  title     =     {Habitat 2.0: Training Home Assistants to Rearrange their Habitat},
-  author    =     {Andrew Szot and Alex Clegg and Eric Undersander and Erik Wijmans and Yili Zhao and John Turner and Noah Maestre and Mustafa Mukadam and Devendra Chaplot and Oleksandr Maksymets and Aaron Gokaslan and Vladimir Vondrus and Sameer Dharur and Franziska Meier and Wojciech Galuba and Angel Chang and Zsolt Kira and Vladlen Koltun and Jitendra Malik and Manolis Savva and Dhruv Batra},
-  booktitle =     {Advances in Neural Information Processing Systems (NeurIPS)},
-  year      =     {2021}
-}
+[//]: # ()
+[//]: # (```)
 
-@inproceedings{habitat19iccv,
-  title     =     {Habitat: {A} {P}latform for {E}mbodied {AI} {R}esearch},
-  author    =     {Manolis Savva and Abhishek Kadian and Oleksandr Maksymets and Yili Zhao and Erik Wijmans and Bhavana Jain and Julian Straub and Jia Liu and Vladlen Koltun and Jitendra Malik and Devi Parikh and Dhruv Batra},
-  booktitle =     {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
-  year      =     {2019}
-}
+[//]: # (@misc{puig2023habitat3,)
 
-```
+[//]: # (      title  = {Habitat 3.0: A Co-Habitat for Humans, Avatars and Robots},)
 
-## Installation
+[//]: # (      author = {Xavi Puig and Eric Undersander and Andrew Szot and Mikael Dallaire Cote and Ruslan Partsey and Jimmy Yang and Ruta Desai and Alexander William Clegg and Michal Hlavac and Tiffany Min and Theo Gervet and Vladimír Vondruš and Vincent-Pierre Berges and John Turner and Oleksandr Maksymets and Zsolt Kira and Mrinal Kalakrishnan and Jitendra Malik and Devendra Singh Chaplot and Unnat Jain and Dhruv Batra and Akshara Rai and Roozbeh Mottaghi},)
 
-1. **Preparing conda env**
+[//]: # (      year={2023},)
 
-   Assuming you have [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/) installed, let's prepare a conda env:
-   ```bash
-   # We require python>=3.9 and cmake>=3.14
-   conda create -n habitat python=3.9 cmake=3.14.0
-   conda activate habitat
-   ```
+[//]: # (      archivePrefix={arXiv},)
 
-1. **conda install habitat-sim**
-   - To install habitat-sim with bullet physics
-      ```
-      conda install habitat-sim withbullet -c conda-forge -c aihabitat
-      ```
-      Note, for newer features added after the most recent release, you may need to install `aihabitat-nightly`. See Habitat-Sim's [installation instructions](https://github.com/facebookresearch/habitat-sim#installation) for more details.
+[//]: # (})
 
-1. **pip install habitat-lab stable version**.
+[//]: # ()
+[//]: # (@inproceedings{szot2021habitat,)
 
-      ```bash
-      git clone --branch stable https://github.com/facebookresearch/habitat-lab.git
-      cd habitat-lab
-      pip install -e habitat-lab  # install habitat_lab
-      ```
-1. **Install habitat-baselines**.
+[//]: # (  title     =     {Habitat 2.0: Training Home Assistants to Rearrange their Habitat},)
 
-    The command above will install only core of Habitat-Lab. To include habitat_baselines along with all additional requirements, use the command below after installing habitat-lab:
+[//]: # (  author    =     {Andrew Szot and Alex Clegg and Eric Undersander and Erik Wijmans and Yili Zhao and John Turner and Noah Maestre and Mustafa Mukadam and Devendra Chaplot and Oleksandr Maksymets and Aaron Gokaslan and Vladimir Vondrus and Sameer Dharur and Franziska Meier and Wojciech Galuba and Angel Chang and Zsolt Kira and Vladlen Koltun and Jitendra Malik and Manolis Savva and Dhruv Batra},)
 
-      ```bash
-      pip install -e habitat-baselines  # install habitat_baselines
-      ```
+[//]: # (  booktitle =     {Advances in Neural Information Processing Systems &#40;NeurIPS&#41;},)
+
+[//]: # (  year      =     {2021})
+
+[//]: # (})
+
+[//]: # ()
+[//]: # (@inproceedings{habitat19iccv,)
+
+[//]: # (  title     =     {Habitat: {A} {P}latform for {E}mbodied {AI} {R}esearch},)
+
+[//]: # (  author    =     {Manolis Savva and Abhishek Kadian and Oleksandr Maksymets and Yili Zhao and Erik Wijmans and Bhavana Jain and Julian Straub and Jia Liu and Vladlen Koltun and Jitendra Malik and Devi Parikh and Dhruv Batra},)
+
+[//]: # (  booktitle =     {Proceedings of the IEEE/CVF International Conference on Computer Vision &#40;ICCV&#41;},)
+
+[//]: # (  year      =     {2019})
+
+[//]: # (})
+
+[//]: # ()
+[//]: # (```)
+
+## Installation Done
+
+[//]: # ()
+[//]: # (1. **Preparing conda env**)
+
+[//]: # ()
+[//]: # (   Assuming you have [conda]&#40;https://docs.conda.io/projects/conda/en/latest/user-guide/install/&#41; installed, let's prepare a conda env:)
+
+[//]: # (   ```bash)
+
+[//]: # (   # We require python>=3.9 and cmake>=3.14)
+
+[//]: # (   conda create -n habitat python=3.9 cmake=3.14.0)
+
+[//]: # (   conda activate habitat)
+
+[//]: # (   ```)
+
+[//]: # (1. **conda install habitat-sim**)
+
+[//]: # (   - To install habitat-sim with bullet physics)
+
+[//]: # (      ```)
+
+[//]: # (      conda install habitat-sim withbullet -c conda-forge -c aihabitat)
+
+[//]: # (      ```)
+
+[//]: # (      Note, for newer features added after the most recent release,)
+
+[//]: # (   - you may need to install `aihabitat-nightly`.)
+
+[//]: # (   - See Habitat-Sim's [installation instructions]&#40;https://github.com/facebookresearch/habitat-sim#installation&#41; for more details.)
+[//]: # ()
+[//]: # (1. **pip install habitat-lab stable version**.)
+
+[//]: # ()
+[//]: # (      ```bash)
+
+[//]: # (      git clone --branch stable https://github.com/facebookresearch/habitat-lab.git)
+
+[//]: # (      cd habitat-lab)
+
+[//]: # (      pip install -e habitat-lab  # install habitat_lab)
+[//]: # (      ```)
+[//]: # (1. **Install habitat-baselines**.)
+
+[//]: # ()
+[//]: # (    The command above will install only core of Habitat-Lab. To include habitat_baselines along with all additional requirements, use the command below after installing habitat-lab:)
+
+[//]: # ()
+[//]: # (      ```bash)
+
+[//]: # (      pip install -e habitat-baselines  # install habitat_baselines)
+
+[//]: # (      ```)
+
+## My Notes
+ 1. More information on the datasets can be found [here](DATASETS.md) at this habitat-lab repo.
+ And also in the [Habitat-Sim repo here](https://github.com/facebookresearch/habitat-sim/blob/main/DATASETS.md#habitat-test-scenes)
+2. Take note for the dataset download location. In the `data` folder,
+there should be a `scene_datasets`, `datasets` and `versioned_data` folder.
+3. This has a bridge with ROS, which may be useful for the physical experiments.
+4. Please refer to [quickstart guide](https://aihabitat.org/docs/habitat-lab/) for more information on how
+to use Habitat-lab and i will create a folder just for the quick start.
+
 
 ## Testing
 
 1. Let's download some 3D assets using Habitat-Sim's python data download utility:
+   ( Note for the downloaded location, the `data` folder should be in the habitat-lab working directory. )
    - Download (testing) 3D scenes:
       ```bash
       python -m habitat_sim.utils.datasets_download --uids habitat_test_scenes --data-path data/
       ```
       Note that these testing scenes do not provide semantic annotations.
+      ```commandline
+        Dataset (habitat_test_scenes) successfully downloaded.
+        Source: '/home/tsaisplus/mrs_llm/habitat-lab/data/versioned_data/habitat_test_scenes'
+        Symlink: '/home/tsaisplus/mrs_llm/habitat-lab/data/scene_datasets/habitat-test-scenes'
+        ```
 
    - Download point-goal navigation episodes for the test scenes:
       ```bash
       python -m habitat_sim.utils.datasets_download --uids habitat_test_pointnav_dataset --data-path data/
       ```
+     ```commandline
+      Dataset (habitat_test_pointnav_dataset) successfully downloaded.
+      Source: '/home/tsaisplus/mrs_llm/habitat-lab/data/versioned_data/habitat_test_pointnav_dataset_1.0'
+      Symlink: '/home/tsaisplus/mrs_llm/habitat-lab/data/datasets/pointnav/habitat-test-scenes'
+      ```
 
-1. **Non-interactive testing**: Test the Pick task: Run the example pick task script
-    <!--- Please, update `examples/example.py` if you update example. -->
-    ```bash
-    python examples/example.py
-    ```
+[//]: # ()
+[//]: # (1. **Non-interactive testing**: Test the Pick task: Run the example pick task script)
 
-    which uses [`habitat-lab/habitat/config/benchmark/rearrange/skills/pick.yaml`](habitat-lab/habitat/config/benchmark/rearrange/skills/pick.yaml) for configuration of task and agent. The script roughly does this:
+[//]: # (    <!--- Please, update `examples/example.py` if you update example. -->)
 
-    ```python
-    import gym
-    import habitat.gym
+[//]: # (    ```bash)
 
-    # Load embodied AI task (RearrangePick) and a pre-specified virtual robot
-    env = gym.make("HabitatRenderPick-v0")
-    observations = env.reset()
+[//]: # (    python examples/example.py)
 
-    terminal = False
+[//]: # (    ```)
 
-    # Step through environment with random actions
-    while not terminal:
-        observations, reward, terminal, info = env.step(env.action_space.sample())
-    ```
+[//]: # (    which uses [`habitat-lab/habitat/config/benchmark/rearrange/skills/pick.yaml`]&#40;habitat-lab/habitat/config/benchmark/rearrange/skills/pick.yaml&#41; for configuration of task and agent. The script roughly does this:)
 
-    To modify some of the configurations of the environment, you can also use the `habitat.gym.make_gym_from_config` method that allows you to create a habitat environment using a configuration.
+[//]: # ()
+[//]: # (    ```python)
 
-    ```python
-    config = habitat.get_config(
-      "benchmark/rearrange/skills/pick.yaml",
-      overrides=["habitat.environment.max_episode_steps=20"]
-    )
-    env = habitat.gym.make_gym_from_config(config)
-    ```
+[//]: # (    import gym)
 
-    If you want to know more about what the different configuration keys overrides do, you can use [this reference](habitat-lab/habitat/config/CONFIG_KEYS.md).
+[//]: # (    import habitat.gym)
 
-    See [`examples/register_new_sensors_and_measures.py`](examples/register_new_sensors_and_measures.py) for an example of how to extend habitat-lab from _outside_ the source code.
+[//]: # ()
+[//]: # (    # Load embodied AI task &#40;RearrangePick&#41; and a pre-specified virtual robot)
+
+[//]: # (    env = gym.make&#40;"HabitatRenderPick-v0"&#41;)
+
+[//]: # (    observations = env.reset&#40;&#41;)
+
+[//]: # ()
+[//]: # (    terminal = False)
+
+[//]: # ()
+[//]: # (    # Step through environment with random actions)
+
+[//]: # (    while not terminal:)
+
+[//]: # (        observations, reward, terminal, info = env.step&#40;env.action_space.sample&#40;&#41;&#41;)
+
+[//]: # (    ```)
+
+2. To modify some of the configurations of the environment, you can also use the `habitat.gym.make_gym_from_config` method that allows you to create a habitat environment using a configuration.
+
+```python
+config = habitat.get_config(
+  "benchmark/rearrange/skills/pick.yaml",
+  overrides=["habitat.environment.max_episode_steps=20"]
+)
+env = habitat.gym.make_gym_from_config(config)
+```
+
+If you want to know more about what the different configuration keys overrides do, you can use [this reference](habitat-lab/habitat/config/CONFIG_KEYS.md).
+
+See [`examples/register_new_sensors_and_measures.py`](examples/register_new_sensors_and_measures.py) for an example of how to extend habitat-lab from _outside_ the source code.
 
 
+[//]: # ()
+[//]: # (1. **Interactive testing**: Using you keyboard and mouse to control a Fetch robot in a ReplicaCAD environment:)
 
-1. **Interactive testing**: Using you keyboard and mouse to control a Fetch robot in a ReplicaCAD environment:
-    ```bash
-    # Pygame for interactive visualization, pybullet for inverse kinematics
-    pip install pygame==2.0.1 pybullet==3.0.4
+[//]: # (    ```bash)
 
-    # Interactive play script
-    python examples/interactive_play.py --never-end
-    ```
+[//]: # (    # Pygame for interactive visualization, pybullet for inverse kinematics)
 
-   Use I/J/K/L keys to move the robot base forward/left/backward/right and W/A/S/D to move the arm end-effector forward/left/backward/right and E/Q to move the arm up/down. The arm can be difficult to control via end-effector control. More details in documentation. Try to move the base and the arm to touch the red bowl on the table. Have fun!
+[//]: # (    pip install pygame==2.0.1 pybullet==3.0.4)
 
-   Note: Interactive testing currently fails on Ubuntu 20.04 with an error: `X Error of failed request:  BadAccess (attempt to access private resource denied)`. We are working on fixing this, and will update instructions once we have a fix. The script works without errors on MacOS.
+[//]: # ()
+[//]: # (    # Interactive play script)
+
+[//]: # (    python examples/interactive_play.py --never-end)
+
+[//]: # (    ```)
+
+[//]: # ()
+[//]: # (   Use I/J/K/L keys to move the robot base forward/left/backward/right and W/A/S/D to move the arm end-effector forward/left/backward/right and E/Q to move the arm up/down. The arm can be difficult to control via end-effector control. More details in documentation. Try to move the base and the arm to touch the red bowl on the table. Have fun!)
+
+[//]: # ()
+[//]: # (   Note: Interactive testing currently fails on Ubuntu 20.04 with an error: `X Error of failed request:  BadAccess &#40;attempt to access private resource denied&#41;`. We are working on fixing this, and will update instructions once we have a fix. The script works without errors on MacOS.)
 
 ## Debugging an environment issue
 
@@ -182,21 +290,31 @@ Our vectorized environments are very fast, but they are not very verbose. When u
 
 Browse the online [Habitat-Lab documentation](https://aihabitat.org/docs/habitat-lab/index.html) and the extensive [tutorial on how to train your agents with Habitat](https://aihabitat.org/tutorial/2020/). For Habitat 2.0, use this [quickstart guide](https://aihabitat.org/docs/habitat2/).
 
+[//]: # ()
+[//]: # ()
+[//]: # (## Docker Setup)
 
-## Docker Setup
-We provide docker containers for Habitat, updated approximately once per year for the [Habitat Challenge](https://github.com/facebookresearch/habitat-challenge). This works on machines with an NVIDIA GPU and requires users to install [nvidia-docker](https://github.com/NVIDIA/nvidia-docker). To setup the habitat stack using docker follow the below steps:
+[//]: # (We provide docker containers for Habitat, updated approximately once per year for the [Habitat Challenge]&#40;https://github.com/facebookresearch/habitat-challenge&#41;. This works on machines with an NVIDIA GPU and requires users to install [nvidia-docker]&#40;https://github.com/NVIDIA/nvidia-docker&#41;. To setup the habitat stack using docker follow the below steps:)
 
-1. Pull the habitat docker image: `docker pull fairembodied/habitat-challenge:testing_2022_habitat_base_docker`
+[//]: # ()
+[//]: # (1. Pull the habitat docker image: `docker pull fairembodied/habitat-challenge:testing_2022_habitat_base_docker`)
 
-1. Start an interactive bash session inside the habitat docker: `docker run --runtime=nvidia -it fairembodied/habitat-challenge:testing_2022_habitat_base_docker`
+[//]: # ()
+[//]: # (1. Start an interactive bash session inside the habitat docker: `docker run --runtime=nvidia -it fairembodied/habitat-challenge:testing_2022_habitat_base_docker`)
 
-1. Activate the habitat conda environment: `conda init; source ~/.bashrc; source activate habitat`
+[//]: # ()
+[//]: # (1. Activate the habitat conda environment: `conda init; source ~/.bashrc; source activate habitat`)
 
-1. Run the testing scripts as above: `cd habitat-lab; python examples/example.py`. This should print out an output like:
-    ```bash
-    Agent acting inside environment.
-    Episode finished after 200 steps.
-    ```
+[//]: # ()
+[//]: # (1. Run the testing scripts as above: `cd habitat-lab; python examples/example.py`. This should print out an output like:)
+
+[//]: # (    ```bash)
+
+[//]: # (    Agent acting inside environment.)
+
+[//]: # (    Episode finished after 200 steps.)
+
+[//]: # (    ```)
 
 ### Questions?
 Can't find the answer to your question? Look up for [common issues](./TROUBLESHOOTING.md) or try asking the developers and community on our [Discussions forum](https://github.com/facebookresearch/habitat-lab/discussions).
@@ -213,11 +331,15 @@ ROS-X-Habitat (https://github.com/ericchen321/ros_x_habitat) is a framework that
 
 Note that ROS-X-Habitat was developed, and is maintained by the Lab for Computational Intelligence at UBC; it has not yet been officially supported by the Habitat Lab team. Please refer to the framework's repository for docs and discussions.
 
+[//]: # ()
+[//]: # (## License)
 
-## License
-Habitat-Lab is MIT licensed. See the [LICENSE file](/LICENSE) for details.
+[//]: # (Habitat-Lab is MIT licensed. See the [LICENSE file]&#40;/LICENSE&#41; for details.)
 
-The trained models and the task datasets are considered data derived from the correspondent scene datasets.
+[//]: # ()
+[//]: # (The trained models and the task datasets are considered data derived from the correspondent scene datasets.)
 
-- Matterport3D based task datasets and trained models are distributed with [Matterport3D Terms of Use](http://kaldir.vc.in.tum.de/matterport/MP_TOS.pdf) and under [CC BY-NC-SA 3.0 US license](https://creativecommons.org/licenses/by-nc-sa/3.0/us/).
-- Gibson based task datasets, the code for generating such datasets, and trained models are distributed with [Gibson Terms of Use](https://storage.googleapis.com/gibson_material/Agreement%20GDS%2006-04-18.pdf) and under [CC BY-NC-SA 3.0 US license](https://creativecommons.org/licenses/by-nc-sa/3.0/us/).
+[//]: # ()
+[//]: # (- Matterport3D based task datasets and trained models are distributed with [Matterport3D Terms of Use]&#40;http://kaldir.vc.in.tum.de/matterport/MP_TOS.pdf&#41; and under [CC BY-NC-SA 3.0 US license]&#40;https://creativecommons.org/licenses/by-nc-sa/3.0/us/&#41;.)
+
+[//]: # (- Gibson based task datasets, the code for generating such datasets, and trained models are distributed with [Gibson Terms of Use]&#40;https://storage.googleapis.com/gibson_material/Agreement%20GDS%2006-04-18.pdf&#41; and under [CC BY-NC-SA 3.0 US license]&#40;https://creativecommons.org/licenses/by-nc-sa/3.0/us/&#41;.)
