@@ -1,5 +1,7 @@
 To make things easier we expect `data` folder of particular structure or symlink presented in habitat-lab working directory.
 
+data folder应该怎么放置？
+
 ### Scenes datasets
 
 | Scenes models | Extract path | Archive size |
