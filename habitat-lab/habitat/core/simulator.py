@@ -204,7 +204,10 @@ class BumpSensor(Sensor):
 
 
 class SensorSuite:
-    r"""Represents a set of sensors, with each sensor being identified
+    r"""
+    整合多个传感器，每个传感器都有一个唯一的id
+
+    Represents a set of sensors, with each sensor being identified
     through a unique id.
     """
 
