@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, Callable, DefaultDict, Optional, Type
 
 from habitat.core.dataset import Dataset
 from habitat.core.embodied_task import Action, EmbodiedTask, Measure
-from habitat.core.simulator import Sensor, Simulator
+from habitat.core.simulator import ActionSpaceConfiguration, Sensor, Simulator
 from habitat.core.utils import Singleton
 
 if TYPE_CHECKING:
@@ -196,6 +196,22 @@ class Registry(metaclass=Singleton):
         return cls._register_impl("env", to_register, name, assert_type=Env)
 
     @classmethod
+    def register_action_space_configuration(
+        cls, to_register=None, *, name: Optional[str] = None
+    ):
+        r"""Register a action space configuration to registry with key :p:`name`
+
+        :param name: Key with which the action space will be registered.
+            If :py:`None` will use the name of the class
+        """
+
+        return cls._register_impl(
+            "action_space_config",
+            to_register,
+            name,
+            assert_type=ActionSpaceConfiguration,
+        )
+    @classmethod
     def _get_impl(cls, _type: str, name: str) -> Type:
         return cls.mapping[_type].get(name, None)
 
@@ -226,6 +242,12 @@ class Registry(metaclass=Singleton):
     @classmethod
     def get_env(cls, name: str) -> Type["RLEnv"]:
         return cls._get_impl("env", name)
+
+    @classmethod
+    def get_action_space_configuration(
+        cls, name: str
+    ) -> Type[ActionSpaceConfiguration]:
+        return cls._get_impl("action_space_config", name)
 
 
 registry = Registry()
