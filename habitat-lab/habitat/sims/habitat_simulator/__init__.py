@@ -21,3 +21,8 @@ def _try_register_habitat_sim():
         class HabitatSimImportError(Simulator):
             def __init__(self, *args, **kwargs):
                 raise habitat_sim_import_error
+    else:
+        from habitat.sims.habitat_simulator.actions import (  # noqa: F401
+            HabitatSimV1ActionSpaceConfiguration,
+        )
+
