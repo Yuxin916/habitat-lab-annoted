@@ -144,11 +144,12 @@ class HabitatSimV2ActionSpaceConfiguration(
         config = super().get()
         new_config = {
             HabitatSimActions.turn_left_s: habitat_sim.ActionSpec(
-                "turn_left_s",
+                "turn_left",
+                # fix the bug. The new action space is still turn_left, but different config
                 habitat_sim.ActuationSpec(amount=self.config.turn_angle_s),
             ),
             HabitatSimActions.turn_right_s: habitat_sim.ActionSpec(
-                "turn_right_s",
+                "turn_right",
                 habitat_sim.ActuationSpec(amount=self.config.turn_angle_s),
             ),
         }
