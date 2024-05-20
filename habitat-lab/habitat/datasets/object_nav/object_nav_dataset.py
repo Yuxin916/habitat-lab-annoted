@@ -73,7 +73,12 @@ class ObjectNavDatasetV1(PointNavDatasetV1):
 
     def __init__(self, config: Optional["DictConfig"] = None) -> None:
         self.goals_by_category = {}
+
+        # 进入PointNavDatasetV1的__init__方法
+        # 在这个里面生成了self.episodes数据
         super().__init__(config)
+
+        # 这里的self.episodes已经在PointNavDatasetV1里面生成了
         self.episodes = list(self.episodes)
 
     @staticmethod

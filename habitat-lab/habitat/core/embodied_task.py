@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 class Action:
     r"""
+    SimulatorTaskAction类继承自Action类
+
     An action that can be performed by an agent solving a task in environment.
     For example for navigation task action classes will be:
     ``MoveForwardAction, TurnLeftAction, TurnRightAction``. The action can
@@ -59,11 +61,12 @@ class Action:
 
 class SimulatorTaskAction(Action):
     r"""
+    所有的动作都会继承这个类
     An ``EmbodiedTask`` action that is wrapping simulator action.
     """
 
     def __init__(
-        self, *args: Any, config: "DictConfig", sim: Simulator, **kwargs: Any
+            self, *args: Any, config: "DictConfig", sim: Simulator, **kwargs: Any
     ) -> None:
         self._config = config
         self._sim = sim
@@ -123,6 +126,7 @@ class Measure:
 
         :return: the current metric for :ref:`Measure`.
         """
+        # 获得当前计算的数值
         return self._metric
 
 
@@ -150,6 +154,7 @@ class Measurements:
 
     def __init__(self, measures: Iterable[Measure]) -> None:
         """Constructor
+        整合所有以Measure为基类的类
 
         :param measures: list containing :ref:`Measure`, uuid of each
             :ref:`Measure` must be unique.
@@ -157,18 +162,30 @@ class Measurements:
         self.measures = OrderedDict()
         for measure in measures:
             assert (
-                measure.uuid not in self.measures
+                    measure.uuid not in self.measures
             ), "'{}' is duplicated measure uuid".format(measure.uuid)
             self.measures[measure.uuid] = measure
 
     def reset_measures(self, *args: Any, **kwargs: Any) -> None:
+        """
+        Reset所有的measure
+        """
         for measure in self.measures.values():
+            # 重置每一个measure
             measure.reset_metric(*args, **kwargs)
 
     def update_measures(self, *args: Any, task, **kwargs: Any) -> None:
+        """
+        更新所有的measure
+        """
         for measure in self.measures.values():
             t_start = time.time()
-            measure.update_metric(*args, task=task, **kwargs)
+            # nav.py update_metric function
+            try:
+                measure.update_metric(*args, task=task, **kwargs)
+            except Exception as e:
+                print(f"Error in measure {measure.uuid}: {e}")
+                print('embodied_task.py: update_measures')
             measure_name = measure._get_uuid(*args, task=task, **kwargs)
             task.add_perf_timing(f"measures.{measure_name}", t_start)
 
@@ -182,7 +199,7 @@ class Measurements:
         return list(self.measures.keys()).index(measure_name)
 
     def check_measure_dependencies(
-        self, measure_name: str, dependencies: List[str]
+            self, measure_name: str, dependencies: List[str]
     ):
         r"""Checks if dependencies measures are enabled and calculatethat the measure
         :param measure_name: a name of the measure for which has dependencies.
@@ -193,7 +210,7 @@ class Measurements:
         measure_index = self._get_measure_index(measure_name)
         for dependency_measure in dependencies:
             assert (
-                dependency_measure in self.measures
+                    dependency_measure in self.measures
             ), f"""{measure_name} measure requires {dependency_measure}
                 listed in the measures list in the config."""
 
@@ -205,14 +222,17 @@ class Measurements:
 
 
 class EmbodiedTask:
-    r"""Base class for embodied task. ``EmbodiedTask`` holds definition of
-    a task that agent needs to solve: action space, observation space,
-    measures, simulator usage. ``EmbodiedTask`` has :ref:`reset` and
-    :ref:`step` methods that are called by ``Env``. ``EmbodiedTask`` is the
-    one of main dimensions for the framework extension. Once new embodied task
-    is introduced implementation of ``EmbodiedTask`` is a formal definition of
-    the task that opens opportunity for others to propose solutions and
-    include it into benchmark results.
+    r"""Base class for embodied task.
+
+    包含一些重要的任务属性：
+        observation space,
+        action space,
+        measurements,
+        用的simulator
+
+    ``Env``里的:ref:`reset` and :ref:`step` 指向这里的reset和step方法。
+
+    nav.py里的NavigationTask类继承自EmbodiedTask类。
 
     Args:
         config: config for the task.
@@ -231,21 +251,30 @@ class EmbodiedTask:
     sensor_suite: SensorSuite
 
     def __init__(
-        self,
-        config: "DictConfig",
-        sim: Simulator,
-        dataset: Optional[Dataset] = None,
+            self,
+            config: "DictConfig",
+            sim: Simulator,
+            dataset: Optional[Dataset] = None,
     ) -> None:
         from habitat.core.registry import registry
+
+        # sim里面只包含RGB，Depth等sensor
+        # gps, compass等sensor在task里面
 
         self._config = config
         self._sim = sim
         self._dataset = dataset
         self._physics_target_sps = config.physics_target_sps
         assert (
-            self._physics_target_sps > 0
+                self._physics_target_sps > 0
         ), "physics_target_sps must be positive"
 
+        # 根据一系列metrics(config.measurements)
+        # 分别初始化对应的measurements
+        # 在nav.py里的NavigationTask类中，
+        # 比如 config.measurements = ['distance_to_goal', 'spl', 'success']
+        # 就会初始化对应的measurements函数 (在nav.py里的NavigationTask类中)
+        # 最后一个Measurements整合起来
         self.measurements = Measurements(
             self._init_entities(
                 entities_configs=config.measurements,
@@ -253,6 +282,12 @@ class EmbodiedTask:
             ).values()
         )
 
+        # 根据一系列sensors(config.lab_sensors)
+        # 分别初始化对应的sensors
+        # 在nav.py里的NavigationTask类中，
+        # 比如 config.lab_sensors = ['objectgoal', 'gps', 'compass']
+        # 就会初始化对应的sensors函数 (在object_nav_task.py, 和nav.py里)
+        # 最后一个SensorSuite整合起来
         self.sensor_suite = SensorSuite(
             self._init_entities(
                 entities_configs=config.lab_sensors,
@@ -260,6 +295,11 @@ class EmbodiedTask:
             ).values()
         )
 
+        # 根据一系列actions(config.actions)
+        # 分别初始化对应的actions
+        # 在nav.py里的NavigationTask类中，
+        # 比如 config.actions = ['move_forward', 'turn_left', 'turn_right']
+        # 就会初始化对应的actions函数 (在nav.py里的NavigationTask类中)
         self.actions = self._init_entities(
             entities_configs=config.actions,
             register_func=registry.get_task_action,
@@ -273,6 +313,13 @@ class EmbodiedTask:
             self._sim.add_perf_timing(*args, **kwargs)
 
     def _init_entities(self, entities_configs, register_func) -> OrderedDict:
+        """
+        批量初始化
+        - measurements, (Measure)
+        - sensors, (Sensor)
+        - actions (Action)
+
+        """
         entities = OrderedDict()
         for entity_name, entity_cfg in entities_configs.items():
             entity_cfg = OmegaConf.create(entity_cfg)
@@ -280,7 +327,7 @@ class EmbodiedTask:
                 raise ValueError(f"Could not find type in {entity_cfg}")
             entity_type = register_func(entity_cfg.type)
             assert (
-                entity_type is not None
+                    entity_type is not None
             ), f"invalid {entity_name} type {entity_cfg.type}"
             entities[entity_name] = entity_type(
                 sim=self._sim,
@@ -292,16 +339,32 @@ class EmbodiedTask:
         return entities
 
     def reset(self, episode: Episode):
+        # 从simulator里面获取observations
         observations = self._sim.reset()
-        observations.update(
-            self.sensor_suite.get_observations(
-                observations=observations,
-                episode=episode,
-                task=self,
-                should_time=True,
-            )
-        )
 
+        if self._sim.habitat_config.num_agents == 1:
+            observations.update(
+                self.sensor_suite.get_observations(
+                    observations=observations,
+                    episode=episode,
+                    task=self,
+                    should_time=True,
+                )
+            )
+        elif self._sim.habitat_config.num_agents > 1:
+            [observations[i].update(
+                self.sensor_suite.get_observations(
+                    observations=observations[i],
+                    episode=episode,
+                    task=self,
+                    agent_id=i,
+                    should_time=True,
+                )
+            )
+                for i in range(len(self._sim.habitat_config.agents))]
+
+        # 重置所有的action
+        # nav.py里的所有action
         for action_instance in self.actions.values():
             action_instance.reset(episode=episode, task=self)
 
@@ -310,15 +373,15 @@ class EmbodiedTask:
         return observations
 
     def _step_single_action(
-        self,
-        action_name: Any,
-        action: Dict[str, Any],
-        episode: Episode,
+            self,
+            action_name: Any,
+            action: Dict[str, Any],
+            episode: Episode,
     ):
         if isinstance(action_name, (int, np.integer)):
             action_name = self.get_action_name(action_name)
         assert (
-            action_name in self.actions
+                action_name in self.actions
         ), f"Can't find '{action_name}' action in {self.actions.keys()}."
         task_action = self.actions[action_name]
         return task_action.step(
@@ -327,17 +390,54 @@ class EmbodiedTask:
         )
 
     def step(self, action: Dict[str, Any], episode: Episode):
+        # Support simpler interface as well
+        if isinstance(action, (str, int, np.integer, List)):
+            action = {"action": action}
+
         action_name = action["action"]
         if "action_args" not in action or action["action_args"] is None:
             action["action_args"] = {}
         observations: Optional[Any] = None
-        if isinstance(action_name, tuple):  # there are multiple actions
-            for a_name in action_name:
-                observations = self._step_single_action(
-                    a_name,
-                    action,
-                    episode,
-                )
+        # if isinstance(action_name, tuple):  # there are multiple actions
+        if isinstance(action_name, List):  # there are multiple actions
+            # for a_name in action_name:
+            #     observations = self._step_single_action(
+            #         a_name,
+            #         action,
+            #         episode,
+            #     )
+
+            if 0 in action_name:
+                task_action = self.actions["stop"]
+                task_action.step(**action["action_args"], task=self)
+                obs = [self._sim.get_sensor_observations(agent_ids=i) for i in
+                       range(len(action_name))]
+            else:
+                try:
+                    obs = self._sim.step(action_name)
+                except Exception as e:
+                    print('action_name: ', action_name)
+                    print("Error in embodied_task: ", e)
+                    print('EmbodiedTask.py: step')
+
+                [obs[i].update(
+                    self.sensor_suite.get_observations(
+                        observations=obs[i],
+                        episode=episode,
+                        agent_id=i,
+                        task=self,
+                    )
+                ) for i in range(len(self._sim.habitat_config.agents))]
+
+            self._is_episode_active = self._check_episode_is_active(
+                observations=obs[0], action=action, episode=episode
+            ) and self._check_episode_is_active(
+                observations=obs[1], action=action, episode=episode
+            )
+
+            # 直接返回obs 不进入下面
+            return obs
+
         else:
             observations = self._step_single_action(
                 action_name, action, episode
@@ -377,7 +477,7 @@ class EmbodiedTask:
         )
 
     def overwrite_sim_config(
-        self, sim_config: "DictConfig", episode: Episode
+            self, sim_config: "DictConfig", episode: Episode
     ) -> "DictConfig":
         r"""Update config merging information from :p:`sim_config` and
         :p:`episode`.
@@ -388,11 +488,11 @@ class EmbodiedTask:
         return sim_config
 
     def _check_episode_is_active(
-        self,
-        *args: Any,
-        action: Union[int, Dict[str, Any]],
-        episode: Episode,
-        **kwargs: Any,
+            self,
+            *args: Any,
+            action: Union[int, Dict[str, Any]],
+            episode: Episode,
+            **kwargs: Any,
     ) -> bool:
         raise NotImplementedError
 

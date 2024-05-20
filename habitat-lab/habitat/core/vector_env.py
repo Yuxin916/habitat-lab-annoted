@@ -33,7 +33,8 @@ from gym import spaces
 
 import habitat
 from habitat.core.batch_rendering.env_batch_renderer import EnvBatchRenderer
-from habitat.core.env import Env, RLEnv
+from habitat.core.env import Env
+from habitat.core.env_RL import RLEnv
 from habitat.core.logging import logger
 from habitat.core.utils import tile_images
 from habitat.gym.gym_env_episode_count_wrapper import EnvCountEpisodeWrapper

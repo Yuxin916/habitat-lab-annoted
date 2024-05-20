@@ -9,6 +9,7 @@ r"""Implements dataset functionality to be used ``habitat.EmbodiedTask``.
 of a ``habitat.Agent`` inside ``habitat.Env``.
 """
 import copy
+import json
 import os
 import random
 from itertools import groupby
@@ -109,7 +110,11 @@ T = TypeVar("T", bound=Episode)
 
 
 class Dataset(Generic[T]):
-    r"""Base class for dataset specification."""
+    r"""Base class for dataset specification.
+    数据集的基类，包括了数据集的基本信息，如数据集的episode列表，数据集的scene列表等。
+
+    Dataset -> PointNavDatasetV1 -> ObjectNavDatasetV1
+    """
     episodes: List[T]
 
     @staticmethod
@@ -195,6 +200,17 @@ class Dataset(Generic[T]):
         return EpisodeIterator(self.episodes, *args, **kwargs)
 
     def to_json(self) -> str:
+        class DatasetJSONEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+
+                return (
+                    obj.__getstate__()
+                    if hasattr(obj, "__getstate__")
+                    else obj.__dict__
+                )
+
         result = DatasetJSONEncoder().encode(self)
         return result
 

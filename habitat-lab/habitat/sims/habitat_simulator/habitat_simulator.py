@@ -288,33 +288,64 @@ class HabitatSim(habitat_sim.Simulator, Simulator):
                 ), "invalid sensor type {}".format(sensor_cfg.type)
                 sim_sensors.append(sensor_type(sensor_cfg))
 
-        self._sensor_suite = SensorSuite(sim_sensors)
+        # sim里面只包含RGB，Depth等sensor
+        # gps, compass等sensor在task里面
+
+
+        # 这样写不是很好
+        # 假设两个agent sensor必须完全一样 只读取第一个agent的sensor
+        self._sensor_suite = SensorSuite(sim_sensors[:2])
+
+        # 分开写呢
+        # sim_sensors[0].uuid = 'rgb_agent_0'
+        # sim_sensors[1].uuid = 'depth_agent_0'
+        # sim_sensors[2].uuid = 'rgb_agent_1'
+        # sim_sensors[3].uuid = 'depth_agent_1'
+        # self._sensor_suite = SensorSuite(sim_sensors)
+
+        # 根据sim里面的sensor(只包含RGB，Depth等sensor)来创建sim_config
+        # 包含了agent_config, sensor_config, sim_config的初始化
+        # multi agent partially supported
         self.sim_config = self.create_sim_config(self._sensor_suite)
+
+        # 获取当前的scene_id
         self._current_scene = self.sim_config.sim_cfg.scene_id
+
+        # 进入habitat-sim的Simulator类
         super().__init__(self.sim_config)
         # load additional object paths specified by the dataset
         # TODO: Should this be moved elsewhere?
         obj_attr_mgr = self.get_object_template_manager()
         for path in self.habitat_config.additional_object_paths:
             obj_attr_mgr.load_configs(path)
+
+        # 默认两个agent有相同的动作空间
         self._action_space = spaces.Discrete(
             len(
                 self.sim_config.agents[
-                    self.habitat_config.default_agent_id
-                ].action_space
+                    self.habitat_config.default_agent_id].action_space
             )
         )
         self._prev_sim_obs: Optional[Observations] = None
 
+        # agent数量
+        self.num_agents = self.habitat_config.num_agents
+
     def create_sim_config(
         self, _sensor_suite: SensorSuite
     ) -> habitat_sim.Configuration:
+        """
+        sim_config, agent_config, sensor_config都需要被读取并且覆盖
+        """
+        # 从habitat_config中获取sim_config配置
         sim_config = habitat_sim.SimulatorConfiguration()
         # Check if Habitat-Sim is post Scene Config Update
         if not hasattr(sim_config, "scene_id"):
             raise RuntimeError(
                 "Incompatible version of Habitat-Sim detected, please upgrade habitat_sim"
             )
+
+        # 覆盖sim_config
         overwrite_config(
             config_from=self.habitat_config.habitat_sim_v0,
             config_to=sim_config,
@@ -325,8 +356,14 @@ class HabitatSim(habitat_sim.Simulator, Simulator):
             self.habitat_config.scene_dataset
         )
         sim_config.scene_id = self.habitat_config.scene
-        lab_agent_config = get_agent_config(self.habitat_config)
+
+        # 从habitat_config中获取agent_config配置
+        # 注意这里只获取了一个agent的配置
+        lab_agent_config = get_agent_config(self.habitat_config,
+                                            self.habitat_config.default_agent_id)
+        # 从habitat_config中获取默认sim_config配置
         agent_config = habitat_sim.AgentConfiguration()
+        # 覆盖agent_config
         overwrite_config(
             config_from=lab_agent_config,
             config_to=agent_config,
@@ -367,6 +404,7 @@ class HabitatSim(habitat_sim.Simulator, Simulator):
                 self.habitat_config.navmesh_include_static_objects
             )
 
+        # 从habitat_config中获取sensor_config配置
         sensor_specifications = []
         for sensor in _sensor_suite.sensors.values():
             assert isinstance(sensor, HabitatSimSensor)
@@ -403,29 +441,50 @@ class HabitatSim(habitat_sim.Simulator, Simulator):
 
         agent_config.sensor_specifications = sensor_specifications
 
-        agent_config.action_space = {
-            0: habitat_sim.ActionSpec("stop"),
-            1: habitat_sim.ActionSpec(
-                "move_forward",
-                habitat_sim.ActuationSpec(
-                    amount=self.habitat_config.forward_step_size
-                ),
-            ),
-            2: habitat_sim.ActionSpec(
-                "turn_left",
-                habitat_sim.ActuationSpec(
-                    amount=self.habitat_config.turn_angle
-                ),
-            ),
-            3: habitat_sim.ActionSpec(
-                "turn_right",
-                habitat_sim.ActuationSpec(
-                    amount=self.habitat_config.turn_angle
-                ),
-            ),
-        }
+        # 注释 - 为了适配更多类型的动作空间
+        # 建议用不同的版本
+        # 具体细节参考habitat-lab/habitat-lab/habitat/sims/habitat_simulator/actions.py
+        # agent_config.action_space = {
+        #     0: habitat_sim.ActionSpec("stop"),
+        #     1: habitat_sim.ActionSpec(
+        #         "move_forward",
+        #         habitat_sim.ActuationSpec(
+        #             amount=self.habitat_config.forward_step_size
+        #         ),
+        #     ),
+        #     2: habitat_sim.ActionSpec(
+        #         "turn_left",
+        #         habitat_sim.ActuationSpec(
+        #             amount=self.habitat_config.turn_angle
+        #         ),
+        #     ),
+        #     3: habitat_sim.ActionSpec(
+        #         "turn_right",
+        #         habitat_sim.ActuationSpec(
+        #             amount=self.habitat_config.turn_angle
+        #         ),
+        #     ),
+        # }
 
-        output = habitat_sim.Configuration(sim_config, [agent_config])
+        # 具体细节参考habitat-lab/habitat-lab/habitat/sims/habitat_simulator/actions.py
+        # 通过registry.register_action_space_configuration注册
+        # 根据config里面的action_space_config来选择对应的配置
+        agent_config.action_space = registry.get_action_space_configuration(
+            self.habitat_config.action_space_config
+        )(self.habitat_config).get()
+        print('\n Details for Discrete Action', agent_config.action_space, '\n')
+
+        # 修改agent_config - 适配多个agent
+        # 默认俩个完全一样的agent
+        # 注意！ 这里还没有agent的不同 ie. start_position, start_rotation, height, radius等
+        agents_config = []
+        for i in range(self.habitat_config.num_agents):
+            agents_config.append(agent_config)
+        # 注意！ 这里的agents_config
+
+        # 整合最后的config
+        output = habitat_sim.Configuration(sim_config, agents_config)
+        # output = habitat_sim.Configuration(sim_config, [agent_config])
         output.enable_batch_renderer = (
             self.habitat_config.renderer.enable_batch_renderer
         )
@@ -458,28 +517,60 @@ class HabitatSim(habitat_sim.Simulator, Simulator):
     def reset(self) -> Observations:
         sim_obs = super().reset()
         if self._update_agents_state():
-            sim_obs = self.get_sensor_observations()
+            if len(self.habitat_config.agents) > 1:
+                # multi agent
+                sim_obs = [self.get_sensor_observations(agent_ids=i) for i in
+                           range(len(self.habitat_config.agents))]
+            else:
+                # single agent
+                sim_obs = self.get_sensor_observations()
 
+        # 上一个时刻的观测
         self._prev_sim_obs = sim_obs
+
         if self.config.enable_batch_renderer:
             self.add_keyframe_to_observations(sim_obs)
             return sim_obs
         else:
-            return self._sensor_suite.get_observations(sim_obs)
+            if len(self.habitat_config.agents) > 1:
+                # multi agent
+                return [self._sensor_suite.get_observations(sim_obs[i]) for i
+                        in range(len(self.habitat_config.agents))]
+            else:
+                # single agent
+                return self._sensor_suite.get_observations(sim_obs)
 
     def step(
         self, action: Optional[Union[str, np.ndarray, int]]
     ) -> Observations:
-        if action is None:
-            sim_obs = self.get_sensor_observations()
-        else:
-            sim_obs = super().step(action)
+        # if action is None:
+        #     sim_obs = self.get_sensor_observations()
+        # else:
+        actions: Any = {}
+        for i in range(len(self.habitat_config.agents)):
+            actions[i] = action[i]
+
+        # DEBUG Habitat_sim STEP FUNCTION
+        try:
+            sim_obs = super().step(actions)
+        except Exception as e:
+            print("Action execute", actions)
+            print("Error in Habitat_sim STEP FUNCTION: ", e)
+
+        # 上一个时刻的观测
         self._prev_sim_obs = sim_obs
+
         if self.config.enable_batch_renderer:
             self.add_keyframe_to_observations(sim_obs)
             return sim_obs
         else:
-            return self._sensor_suite.get_observations(sim_obs)
+            if len(self.habitat_config.agents) > 1:
+                # multi agent
+                return [self._sensor_suite.get_observations(sim_obs[i]) for i
+                        in range(len(self.habitat_config.agents))]
+            else:
+                # single agent
+                return self._sensor_suite.get_observations(sim_obs)
 
     def render(self, mode: str = "rgb") -> Any:
         r"""
@@ -520,6 +611,7 @@ class HabitatSim(habitat_sim.Simulator, Simulator):
                 self.close(destroy=False)
             super().reconfigure(self.sim_config)
 
+        # 更新agent的状态
         self._update_agents_state()
 
     def geodesic_distance(

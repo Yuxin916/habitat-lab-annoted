@@ -44,10 +44,14 @@ class Env:
     :data action_space: ``gym.space`` object corresponding to valid actions.
 
     All the information  needed for working on embodied task with simulator
-    is abstracted inside :ref:`Env`. Acts as a base for other derived
-    environment classes. :ref:`Env` consists of three major components:
-    ``dataset`` (`episodes`), ``simulator`` (:ref:`sim`) and :ref:`task` and
-    connects all the three components together.
+    is abstracted inside
+
+    :ref:`Env`. Acts as a base for other derived environment classes. 基础环境
+    :ref:`Env` consists of three major components:
+            ``dataset`` (`episodes`)
+            ``simulator`` (:ref:`sim`)
+             :ref:`task`
+    and connects all the three components together.
     """
 
     observation_space: spaces.Dict
@@ -74,7 +78,7 @@ class Env:
 
         :param config: config for the environment. Should contain id for
             simulator and ``task_name`` which are passed into ``make_sim`` and
-            ``make_task``.
+            ``make_task``. 所有config参数
         :param dataset: reference to dataset for task instance level
             information. Can be defined as :py:`None` in which case
             ``_episodes`` should be populated from outside.
@@ -84,9 +88,15 @@ class Env:
             config = config.habitat
         self._config = config
         self._dataset = dataset
+        # 在没有dataset传进来的时候
+        # 根据config文件中的dataset配置，创建dataset
         if self._dataset is None and config.dataset.type:
+            # @registry.register_dataset(name="ObjectNav-v1")
+            # /habitat-lab/habitat-lab/habitat/datasets/object_nav/object_nav_dataset.py
+            # 获取self.episode
             self._dataset = make_dataset(
-                id_dataset=config.dataset.type, config=config.dataset
+                id_dataset=config.dataset.type, # ObjectNav-v1
+                config=config.dataset
             )
 
         self._current_episode = None
@@ -94,11 +104,12 @@ class Env:
         self._episode_from_iter_on_reset = True
         self._episode_force_changed = False
 
-        # load the first scene if dataset is present
+        # TODO: 后面出问题了再看
         if self._dataset:
             assert (
                 len(self._dataset.episodes) > 0
             ), "dataset should have non-empty episodes list"
+
             self._setup_episode_iterator()
             self.current_episode = next(self.episode_iterator)
             with read_write(self._config):
@@ -111,27 +122,49 @@ class Env:
         else:
             self.number_of_episodes = None
 
+        # 通过config文件中的simulator配置，创建simulator
+        # 通过registry，创建simulator
+        # @registry.register_simulator(name="Sim-v0")
+        # /habitat-lab/habitat-lab/habitat/sims/habitat_simulator line 270
         self._sim = make_sim(
-            id_sim=self._config.simulator.type, config=self._config.simulator
+            id_sim=self._config.simulator.type,  # "Sim-v0"
+            config=self._config.simulator
         )
 
+        # 通过config文件中的task配置，创建task
+        # 通过registry，创建task
+        # @registry.register_task(name="Nav-v0")
+        # /habitat-lab/habitat-lab/habitat/core/embodied_task.py
         self._task = make_task(
             self._config.task.type,
             config=self._config.task,
             sim=self._sim,
             dataset=self._dataset,
         )
+
+        # 合并sim和task的状态空间
+            # sim里面只包含RGB，Depth等sensor
+            # gps, compass等sensor在task里面
         self.observation_space = spaces.Dict(
             {
                 **self._sim.sensor_suite.observation_spaces.spaces,
                 **self._task.sensor_suite.observation_spaces.spaces,
             }
         )
+
+        # 从task中读取动作空间
         self.action_space = self._task.action_space
+
+        # 一个episode的最长时间 wallclock time
         self._max_episode_seconds = (
             self._config.environment.max_episode_seconds
         )
+        # 一个episode的最大步数
         self._max_episode_steps = self._config.environment.max_episode_steps
+        # 一个episode的agent数量
+        self.num_agents = self._config.simulator.num_agents
+
+        # 一些数据
         self._elapsed_steps = 0
         self._episode_start_time: Optional[float] = None
         self._episode_over = False
@@ -207,6 +240,7 @@ class Env:
 
     @property
     def task(self) -> EmbodiedTask:
+        # 指向EmbodiedTask
         return self._task
 
     @property
@@ -228,17 +262,17 @@ class Env:
             and self._max_episode_seconds <= self._elapsed_seconds
         )
 
-    def _reset_stats(self) -> None:
-        self._episode_start_time = time.time()
-        self._elapsed_steps = 0
-        self._episode_over = False
-
     def reset(self) -> Observations:
         r"""Resets the environments and returns the initial observations.
 
         :return: initial observations from the environment.
         """
-        self._reset_stats()
+        ############################################################
+        # reset一些数据 - episode开始时间，episode结束标志，episode步数
+        self._episode_start_time = time.time()
+        self._elapsed_steps = 0
+        self._episode_over = False
+        ############################################################
 
         # Delete the shortest path cache of the current episode
         # Caching it for the next time we see this episode isn't really worth
@@ -258,9 +292,25 @@ class Env:
         self._episode_force_changed = False
 
         assert self._current_episode is not None, "Reset requires an episode"
+
+        # 在每次reset环境的时候 覆盖_task里面的config
         self.reconfigure(self._config)
 
+        # 在embodied_task.py中reset
+        """
+        observations是一个list of 2 agents
+        Each agent has a dict of observations (all ndarray)
+            'rgb': (480, 640, 3)
+            'depth': (480, 640, 1)
+            'objectgoal': (1,)
+            'compass': (1,)
+            'gps': (2,)
+
+        两个agent初始化在一个点 但是朝向不同
+        """
         observations = self.task.reset(episode=self.current_episode)
+
+        # reset所有measurements
         self._task.measurements.reset_measures(
             episode=self.current_episode,
             task=self.task,
@@ -307,16 +357,21 @@ class Env:
         if isinstance(action, (str, int, np.integer)):
             action = {"action": action}
 
-        observations = self.task.step(
-            action=action, episode=self.current_episode
-        )
+        try:
+            observations = self.task.step(
+                action=action, episode=self.current_episode)
+        except Exception as e:
+            print(f"Error in env.py step: {e}")
 
-        self._task.measurements.update_measures(
-            episode=self.current_episode,
-            action=action,
-            task=self.task,
-            observations=observations,
-        )
+        try:
+            self._task.measurements.update_measures(
+                episode=self.current_episode,
+                action=action,
+                task=self.task,
+                observations=observations,
+            )
+        except Exception as e:
+            print(f"Error in env.py update_measures: {e}")
 
         self._update_step_stats()
 
@@ -336,10 +391,15 @@ class Env:
         self._task.seed(seed)
 
     def reconfigure(self, config: "DictConfig") -> None:
+        # 在每次reset环境的时候
+        # 根据当前的episode信息
+        # 覆盖_task里面的config
+
         self._config = self._task.overwrite_sim_config(
             config, self.current_episode
         )
-
+        # habitat_simulator 根据当前的episode信息
+        # 更新sim_config和agent_state
         self._sim.reconfigure(self._config.simulator, self.current_episode)
 
     def render(self, mode="rgb") -> np.ndarray:
@@ -355,140 +415,4 @@ class Env:
         self.close()
 
 
-class RLEnv(gym.Env):
-    r"""Reinforcement Learning (RL) environment class which subclasses ``gym.Env``.
 
-    This is a wrapper over :ref:`Env` for RL users. To create custom RL
-    environments users should subclass `RLEnv` and define the following
-    methods: :ref:`get_reward_range()`, :ref:`get_reward()`,
-    :ref:`get_done()`, :ref:`get_info()`.
-
-    As this is a subclass of ``gym.Env``, it implements `reset()` and
-    `step()`.
-    """
-
-    _env: Env
-
-    def __init__(
-        self, config: "DictConfig", dataset: Optional[Dataset] = None
-    ) -> None:
-        """Constructor
-
-        :param config: config to construct :ref:`Env`
-        :param dataset: dataset to construct :ref:`Env`.
-        """
-        if "habitat" in config:
-            config = config.habitat
-        self._core_env_config = config
-        self._env = Env(config, dataset)
-        self.observation_space = self._env.observation_space
-        self.action_space = self._env.action_space
-        self.number_of_episodes = self._env.number_of_episodes
-        self.reward_range = self.get_reward_range()
-
-    @property
-    def config(self) -> "DictConfig":
-        return self._core_env_config
-
-    @property
-    def habitat_env(self) -> Env:
-        return self._env
-
-    @property
-    def episodes(self) -> List[Episode]:
-        return self._env.episodes
-
-    @episodes.setter
-    def episodes(self, episodes: List[Episode]) -> None:
-        self._env.episodes = episodes
-
-    def current_episode(self, all_info: bool = False) -> BaseEpisode:
-        r"""Returns the current episode of the environment.
-
-        :param all_info: If true, all the information in the episode
-                         will be provided. Otherwise, only episode_id
-                         and scene_id will be included.
-        :return: The BaseEpisode object for the current episode.
-        """
-        if all_info:
-            return self._env.current_episode
-        else:
-            return BaseEpisode(
-                episode_id=self._env.current_episode.episode_id,
-                scene_id=self._env.current_episode.scene_id,
-            )
-
-    @profiling_wrapper.RangeContext("RLEnv.reset")
-    def reset(
-        self, *, return_info: bool = False, **kwargs
-    ) -> Union[Observations, Tuple[Observations, Dict]]:
-        observations = self._env.reset()
-        if return_info:
-            return observations, self.get_info(observations)
-        else:
-            return observations
-
-    def get_reward_range(self):
-        r"""Get min, max range of reward.
-
-        :return: :py:`[min, max]` range of reward.
-        """
-        raise NotImplementedError
-
-    def get_reward(self, observations: Observations) -> Any:
-        r"""Returns reward after action has been performed.
-
-        :param observations: observations from simulator and task.
-        :return: reward after performing the last action.
-
-        This method is called inside the :ref:`step()` method.
-        """
-        raise NotImplementedError
-
-    def get_done(self, observations: Observations) -> bool:
-        r"""Returns boolean indicating whether episode is done after performing
-        the last action.
-
-        :param observations: observations from simulator and task.
-        :return: done boolean after performing the last action.
-
-        This method is called inside the step method.
-        """
-        raise NotImplementedError
-
-    def get_info(self, observations) -> Dict[Any, Any]:
-        r"""..
-
-        :param observations: observations from simulator and task.
-        :return: info after performing the last action.
-        """
-        raise NotImplementedError
-
-    @profiling_wrapper.RangeContext("RLEnv.step")
-    def step(self, *args, **kwargs) -> Tuple[Observations, Any, bool, dict]:
-        r"""Perform an action in the environment.
-
-        :return: :py:`(observations, reward, done, info)`
-        """
-
-        observations = self._env.step(*args, **kwargs)
-        reward = self.get_reward(observations)
-        done = self.get_done(observations)
-        info = self.get_info(observations)
-
-        return observations, reward, done, info
-
-    def seed(self, seed: Optional[int] = None) -> None:
-        self._env.seed(seed)
-
-    def render(self, mode: str = "rgb") -> np.ndarray:
-        return self._env.render(mode)
-
-    def close(self) -> None:
-        self._env.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()

@@ -6,7 +6,8 @@
 
 from typing import TYPE_CHECKING, Type, Union
 
-from habitat.core.env import Env, RLEnv
+from habitat.core.env import Env
+from habitat.core.env_RL import RLEnv
 from habitat.datasets import make_dataset
 
 if TYPE_CHECKING:
