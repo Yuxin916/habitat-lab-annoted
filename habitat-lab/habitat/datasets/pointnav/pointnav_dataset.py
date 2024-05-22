@@ -111,35 +111,49 @@ class PointNavDatasetV1(Dataset):
         if config is None:
             return
 
+        # 进入对应split的数据集文件
+        # 比如'/home/tsaisplus/mrs_llm/myproject/data/objectnav_hm3d_v2/val/val.json.gz'
         datasetfile_path = config.data_path.format(split=config.split)
 
         self._load_from_file(datasetfile_path, config.scenes_dir)
 
         # Read separate file for each scene
+        # folder 比如/home/tsaisplus/mrs_llm/Co-NavGPT/data/objectgoal_hm3d/val
         dataset_dir = os.path.dirname(datasetfile_path)
+
+        # 检查是否有content folder （是否有场景文件）
+        # 有关于content的文件夹，可以去看/env/debug_vis_data
         has_individual_scene_files = os.path.exists(
             self.content_scenes_path.split("{scene}")[0].format(
                 data_path=dataset_dir
             )
         )
         if has_individual_scene_files:
-            scenes = config.content_scenes
+            scenes = config.content_scenes  # *
             if ALL_SCENES_MASK in scenes:
+                # 获取所有的scene
                 scenes = self._get_scenes_from_folder(
                     content_scenes_path=self.content_scenes_path,
                     dataset_dir=dataset_dir,
                 )
 
+            # 这里获取的scene是一个list，里面是所有的scene ID, 比如['4ok3usBNeis', '5cdEh9F2hJL' ...]
             for scene in scenes:
                 scene_filename = self.content_scenes_path.format(
                     data_path=dataset_dir, scene=scene
                 )
 
+                # 读取对应的scene文件
+                # 一个scene文件里面有多个episode
                 self._load_from_file(scene_filename, config.scenes_dir)
 
         else:
+            print("No content folder found -> pointnav dataset.py")
             self.episodes = list(
                 filter(self.build_content_scenes_filter(config), self.episodes)
+            )
+            raise NotImplementedError(
+                "Loading all scenes from a single file is not implemented"
             )
 
     def to_binary(self) -> Dict[str, Any]:
@@ -174,4 +188,6 @@ class PointNavDatasetV1(Dataset):
                 for path in episode.shortest_paths:
                     for p_index, point in enumerate(path):
                         path[p_index] = ShortestPathPoint(**point)
+
+            # 读取episode
             self.episodes.append(episode)

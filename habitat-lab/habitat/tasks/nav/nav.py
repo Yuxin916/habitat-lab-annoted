@@ -1432,7 +1432,7 @@ class NavigationTask(EmbodiedTask):
                             float(k) for k in episode.start_rotation
                         ]
                         agent_config.is_set_start_state = True
-                        print('agent {}'.format(i), agent_config)
+                        # print('agent {}'.format(i), agent_config)
                     else:
                         # 调用第i个agent的配置
                         agent_config = get_agent_config(config.simulator, i)
@@ -1446,7 +1446,7 @@ class NavigationTask(EmbodiedTask):
                         ]
                         agent_config.start_rotation = source_rotation
                         agent_config.is_set_start_state = True
-                        print('agent {}'.format(i), agent_config)
+                        # print('agent {}'.format(i), agent_config)
 
         return config
 

@@ -472,7 +472,7 @@ class HabitatSim(habitat_sim.Simulator, Simulator):
         agent_config.action_space = registry.get_action_space_configuration(
             self.habitat_config.action_space_config
         )(self.habitat_config).get()
-        print('\n Details for Discrete Action', agent_config.action_space, '\n')
+        # print('\n Details for Discrete Action', agent_config.action_space, '\n')
 
         # 修改agent_config - 适配多个agent
         # 默认俩个完全一样的agent

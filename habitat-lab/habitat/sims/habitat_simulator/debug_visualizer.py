@@ -16,7 +16,7 @@ from habitat.core.logging import logger
 from habitat.utils.common import check_make_dir
 from habitat_sim.physics import ManagedArticulatedObject, ManagedRigidObject
 
-
+#TODO: can use this
 class DebugObservation:
     """
     Observation wrapper to provide a simple interface for managing debug observations and caching the image.
