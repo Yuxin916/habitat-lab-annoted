@@ -25,10 +25,12 @@ __all__ = [
     "StopActionConfig",
     "MoveForwardActionConfig",
     "TurnLeftActionConfig",
-    "TurnLeftActionConfig",
+    # "TurnLeftActionConfig",
     "TurnRightActionConfig",
     "LookUpActionConfig",
     "LookDownActionConfig",
+    "TurnLeftSActionConfig",
+    "TurnRightSActionConfig",
     # NAVIGATION MEASURES
     "NumStepsMeasurementConfig",
     "DistanceToGoalMeasurementConfig",
@@ -206,6 +208,21 @@ class LookDownActionConfig(DiscreteNavigationActionConfig):
     """
     type: str = "LookDownAction"
 
+@dataclass
+class TurnLeftSActionConfig(ActionConfig):
+    r"""
+    In Navigation tasks only, this discrete action will rotate the robot to the left
+    by a fixed amount determined by the SimulatorConfig.turn_angle_s amount.
+    """
+    type: str = "TurnLeftSAction"
+
+@dataclass
+class TurnRightSActionConfig(ActionConfig):
+    r"""
+    In Navigation tasks only, this discrete action will rotate the robot to the right
+    by a fixed amount determined by the SimulatorConfig.turn_angle_s amount.
+    """
+    type: str = "TurnRightSAction"
 
 @dataclass
 class TeleportActionConfig(ActionConfig):
@@ -1747,7 +1764,7 @@ class SimulatorConfig(HabitatBaseConfig):
     #
     seed: int = II("habitat.seed")
     default_agent_id: int = 0
-    debug_render: bool = False
+    debug_render: bool = True
     debug_render_articulated_agent: bool = False
     kinematic_mode: bool = False
     # If False, will skip setting the semantic IDs of objects in
@@ -1788,6 +1805,11 @@ class SimulatorConfig(HabitatBaseConfig):
     object_ids_start: int = 100
     # Configuration for rendering
     renderer: RendererConfig = RendererConfig()
+    # different action spaces
+    action_space_config: str = "v0"
+    num_agents: int = 2
+    tilt_angle: int = 30
+    turn_angle_s: int = 10
 
 
 @dataclass
@@ -1971,6 +1993,18 @@ cs.store(
     group="habitat/task/actions",
     name="look_down",
     node=LookDownActionConfig,
+)
+cs.store(
+    package="habitat.task.actions.turn_left_s",
+    group="habitat/task/actions",
+    name="turn_left_s",
+    node=TurnLeftSActionConfig,
+)
+cs.store(
+    package="habitat.task.actions.turn_right_s",
+    group="habitat/task/actions",
+    name="turn_right_s",
+    node=TurnRightSActionConfig,
 )
 cs.store(
     package="habitat.task.actions.arm_action",

@@ -324,9 +324,13 @@ class Env:
 
     def _update_step_stats(self) -> None:
         self._elapsed_steps += 1
+        # 是否episode结束
         self._episode_over = not self._task.is_episode_active
+        # 是否超出episode的最大步数或者时间
         if self._past_limit():
+            # print("DEBUG - env.py _update_step_stats -> Past Limit")
             self._episode_over = True
+            pass
 
         if self.episode_iterator is not None and isinstance(
             self.episode_iterator, EpisodeIterator

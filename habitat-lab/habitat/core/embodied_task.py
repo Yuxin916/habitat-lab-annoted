@@ -407,28 +407,33 @@ class EmbodiedTask:
             #         episode,
             #     )
 
+            # if 0 in action_name:
+            #     task_action = self.actions["stop"]
+            #     task_action.step(**action["action_args"], task=self)
+            #     obs = [self._sim.get_sensor_observations(agent_ids=i) for i in
+            #            range(len(action_name))]
+            # else:
+            try:
+                obs = self._sim.step(action_name)
+            except Exception as e:
+                print('action_name: ', action_name)
+                print("Error in embodied_task: ", e)
+                print('EmbodiedTask.py: step')
+
+            [obs[i].update(
+                self.sensor_suite.get_observations(
+                    observations=obs[i],
+                    episode=episode,
+                    agent_id=i,
+                    task=self,
+                )
+            ) for i in range(len(self._sim.habitat_config.agents))]
+
             if 0 in action_name:
                 task_action = self.actions["stop"]
                 task_action.step(**action["action_args"], task=self)
-                obs = [self._sim.get_sensor_observations(agent_ids=i) for i in
-                       range(len(action_name))]
-            else:
-                try:
-                    obs = self._sim.step(action_name)
-                except Exception as e:
-                    print('action_name: ', action_name)
-                    print("Error in embodied_task: ", e)
-                    print('EmbodiedTask.py: step')
 
-                [obs[i].update(
-                    self.sensor_suite.get_observations(
-                        observations=obs[i],
-                        episode=episode,
-                        agent_id=i,
-                        task=self,
-                    )
-                ) for i in range(len(self._sim.habitat_config.agents))]
-
+            # 分别检测两个agent是否active
             self._is_episode_active = self._check_episode_is_active(
                 observations=obs[0], action=action, episode=episode
             ) and self._check_episode_is_active(
@@ -438,29 +443,29 @@ class EmbodiedTask:
             # 直接返回obs 不进入下面
             return obs
 
-        else:
-            observations = self._step_single_action(
-                action_name, action, episode
-            )
+        # else:
+        #     observations = self._step_single_action(
+        #         action_name, action, episode
+        #     )
 
-        self._sim.step_physics(1.0 / self._physics_target_sps)  # type:ignore
-
-        if observations is None:
-            observations = self._sim.step(None)
-
-        observations.update(
-            self.sensor_suite.get_observations(
-                observations=observations,
-                episode=episode,
-                action=action,
-                task=self,
-                should_time=True,
-            )
-        )
-        self._is_episode_active = self._check_episode_is_active(
-            observations=observations, action=action, episode=episode
-        )
-        return observations
+        # self._sim.step_physics(1.0 / self._physics_target_sps)  # type:ignore
+        #
+        # if observations is None:
+        #     observations = self._sim.step(None)
+        #
+        # observations.update(
+        #     self.sensor_suite.get_observations(
+        #         observations=observations,
+        #         episode=episode,
+        #         action=action,
+        #         task=self,
+        #         should_time=True,
+        #     )
+        # )
+        # self._is_episode_active = self._check_episode_is_active(
+        #     observations=observations, action=action, episode=episode
+        # )
+        # return observations
 
     def get_action_name(self, action_index: Union[int, np.integer]):
         if action_index >= len(self.actions):

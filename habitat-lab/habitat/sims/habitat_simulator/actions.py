@@ -96,7 +96,12 @@ HabitatSimActions: HabitatSimActionsSingleton = HabitatSimActionsSingleton()
 class HabitatSimV0ActionSpaceConfiguration(ActionSpaceConfiguration):
     def get(self):
         return {
-            HabitatSimActions.stop: habitat_sim.ActionSpec("stop"),
+            HabitatSimActions.stop: habitat_sim.ActionSpec(
+                "move_forward",
+                habitat_sim.ActuationSpec(
+                    amount=0.0
+                ),
+            ),
             HabitatSimActions.move_forward: habitat_sim.ActionSpec(
                 "move_forward",
                 habitat_sim.ActuationSpec(

@@ -290,6 +290,7 @@ class VelocityAction(SimulatorTaskAction):
         )
 
         # Stop is called if both linear/angular speed are below their threshold
+        # 速度太小，停止
         if (
             abs(linear_velocity) < self.min_abs_lin_speed
             and abs(angular_velocity) < self.min_abs_ang_speed
@@ -1350,7 +1351,6 @@ class DistanceToGoal(Measure):
 
         # print('Distance to target', self._metric)
 
-
 @registry.register_measure
 class DistanceToGoalReward(Measure):
     """
@@ -1360,6 +1360,58 @@ class DistanceToGoalReward(Measure):
     """
 
     cls_uuid: str = "distance_to_goal_reward"
+
+    def __init__(
+        self, sim: Simulator, config: "DictConfig", *args: Any, **kwargs: Any
+    ):
+        self._sim = sim
+        self._config = config
+        self._previous_distance: Optional[float] = None
+        super().__init__()
+
+    def _get_uuid(self, *args: Any, **kwargs: Any) -> str:
+        return self.cls_uuid
+
+    def reset_metric(self, episode, task, *args: Any, **kwargs: Any):
+        # 检查measurements之间的依赖关系
+        task.measurements.check_measure_dependencies(
+            self.uuid, [DistanceToGoal.cls_uuid]
+        )
+        # 获取此时两个robot分别距离目标的距离
+        self._previous_distance = task.measurements.measures[
+            DistanceToGoal.cls_uuid
+        ].get_metric()
+        # 更新这个时刻的metric
+        self.update_metric(episode=episode, task=task, *args,
+                           **kwargs)  # type: ignore
+
+    def update_metric(
+        self, episode, task: EmbodiedTask, *args: Any, **kwargs: Any
+    ):
+        # 获取此时两个robot分别距离目标的距离
+        distance_to_target = task.measurements.measures[
+            DistanceToGoal.cls_uuid
+        ].get_metric()
+
+        self._metric = []
+        for i in range(self._sim.habitat_config.num_agents):
+            # 更新reward
+            # -距离目标的距离
+            self._metric.append(-(distance_to_target[i]))
+            self._previous_distance[i] = distance_to_target[i]
+
+        # print('Distance to goal reward:', self._metric)
+
+
+@registry.register_measure
+class DistanceToGoalReward_Diff(Measure):
+    """
+    The measure calculates a reward based on the distance towards the goal.
+    The reward is `- (new_distance - previous_distance)` i.e. the
+    decrease of distance to the goal.
+    """
+
+    cls_uuid: str = "distance_to_goal_reward_diff"
 
     def __init__(
         self, sim: Simulator, config: "DictConfig", *args: Any, **kwargs: Any
