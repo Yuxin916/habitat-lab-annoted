@@ -840,11 +840,8 @@ class Success(Measure):
             DistanceToGoal.cls_uuid
         ].get_metric()
 
-        try:
-            distance_to_target = min(distance_to_target)
-        except:
-            print('Error:', distance_to_target)
-            print('debug')
+        distance_to_target = min(distance_to_target)
+
 
         if (
             hasattr(task, "is_stop_called")
@@ -1332,7 +1329,8 @@ class DistanceToGoal(Measure):
                 ))
             elif self._distance_to == "VIEW_POINTS":
                 distance_to_target.append(self._sim.geodesic_distance(
-                    current_position, self._episode_view_points,
+                    current_position,
+                    self._episode_view_points,
                     episode
                 ))
             else:

@@ -434,6 +434,7 @@ class EmbodiedTask:
                 task_action.step(**action["action_args"], task=self)
 
             # 分别检测两个agent是否active
+            # nav.py
             self._is_episode_active = self._check_episode_is_active(
                 observations=obs[0], action=action, episode=episode
             ) and self._check_episode_is_active(

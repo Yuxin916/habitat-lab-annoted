@@ -8,11 +8,12 @@ defaults:
     - turn_right
     - look_up
     - look_down
+    - turn_left_s
+    - turn_right_s
   - measurements:
     - distance_to_goal
     - success
     - spl
-    - soft_spl
     - distance_to_goal_reward
   - lab_sensors:
     - objectgoal_sensor
@@ -20,17 +21,13 @@ defaults:
     - gps_sensor
   - _self_
 
-actions:
-  look_up:
-    tilt_angle: 30
-  look_down:
-    tilt_angle: 30
 
 type: ObjectNav-v1
 end_on_success: True
 reward_measure: "distance_to_goal_reward"
+# "distance_to_goal_reward_diff" "distance_to_goal_reward"
 success_measure: "spl"
-
+success_reward: 10.0
 
 goal_sensor_uuid: objectgoal
 
@@ -38,4 +35,4 @@ measurements:
   distance_to_goal:
     distance_to: VIEW_POINTS
   success:
-    success_distance: 0.1
+    success_distance: 0.2  # FIXED
