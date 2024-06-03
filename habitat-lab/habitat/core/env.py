@@ -325,12 +325,14 @@ class Env:
     def _update_step_stats(self) -> None:
         self._elapsed_steps += 1
         # 是否episode结束
+        # 1. STOP动作被执行 - both linear/angular speed are below their threshold
         self._episode_over = not self._task.is_episode_active
+        if self._episode_over:
+            print("DEBUG - env.py _update_step_stats -> STOP Called")
         # 是否超出episode的最大步数或者时间
         if self._past_limit():
-            # print("DEBUG - env.py _update_step_stats -> Past Limit")
+            print("DEBUG - env.py _update_step_stats -> Past Limit")
             self._episode_over = True
-            pass
 
         if self.episode_iterator is not None and isinstance(
             self.episode_iterator, EpisodeIterator
