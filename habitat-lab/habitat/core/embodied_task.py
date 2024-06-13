@@ -348,9 +348,11 @@ class EmbodiedTask:
                     observations=observations,
                     episode=episode,
                     task=self,
+                    agent_id=0,
                     should_time=True,
                 )
             )
+            observations = [observations]
         elif self._sim.habitat_config.num_agents > 1:
             [observations[i].update(
                 self.sensor_suite.get_observations(
@@ -398,8 +400,9 @@ class EmbodiedTask:
         if "action_args" not in action or action["action_args"] is None:
             action["action_args"] = {}
         observations: Optional[Any] = None
+
         # if isinstance(action_name, tuple):  # there are multiple actions
-        if isinstance(action_name, List):  # there are multiple actions
+        if isinstance(action_name, List) and len(action_name) > 1:  # there are multiple actions
             # for a_name in action_name:
             #     observations = self._step_single_action(
             #         a_name,
@@ -444,29 +447,34 @@ class EmbodiedTask:
             # 直接返回obs 不进入下面
             return obs
 
-        # else:
-        #     observations = self._step_single_action(
-        #         action_name, action, episode
-        #     )
+        else:
+            raise NotImplementedError
+            action['action'] = action_name[0]
+            action_name = action["action"]
 
-        # self._sim.step_physics(1.0 / self._physics_target_sps)  # type:ignore
-        #
-        # if observations is None:
-        #     observations = self._sim.step(None)
-        #
-        # observations.update(
-        #     self.sensor_suite.get_observations(
-        #         observations=observations,
-        #         episode=episode,
-        #         action=action,
-        #         task=self,
-        #         should_time=True,
-        #     )
-        # )
-        # self._is_episode_active = self._check_episode_is_active(
-        #     observations=observations, action=action, episode=episode
-        # )
-        # return observations
+            observations = self._step_single_action(
+                action_name, action, episode
+            )
+
+            self._sim.step_physics(1.0 / self._physics_target_sps)  # type:ignore
+
+            # havbitat simulators里面的step
+            if observations is None:
+                observations = self._sim.step(None)
+
+            observations.update(
+                self.sensor_suite.get_observations(
+                    observations=observations,
+                    episode=episode,
+                    action=action,
+                    task=self,
+                    should_time=True,
+                )
+            )
+            self._is_episode_active = self._check_episode_is_active(
+                observations=observations, action=action, episode=episode
+            )
+            return observations
 
     def get_action_name(self, action_index: Union[int, np.integer]):
         if action_index >= len(self.actions):
