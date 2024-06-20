@@ -1,6 +1,9 @@
 # @package _global_
 
 defaults:
+  # /home/tsaisplus/mrs_llm/myproject/habitat-lab/habitat-lab/habitat/config/default_structured_configs.py
   - /habitat: habitat_config_base
+  # /home/tsaisplus/mrs_llm/myproject/habitat-lab/habitat-lab/habitat/config/habitat/task/pointnav.yaml
   - /habitat/task: pointnav
+  # /home/tsaisplus/mrs_llm/myproject/habitat-lab/habitat-lab/habitat/config/habitat/simulator/sensor_setups/rgbd_agent.yaml
   - /habitat/simulator/sensor_setups@habitat.simulator.agents.main_agent: rgbd_agent

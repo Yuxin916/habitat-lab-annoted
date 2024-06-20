@@ -1,7 +1,9 @@
 # @package _global_
 
 defaults:
+  # /home/tsaisplus/mrs_llm/myproject/habitat-lab/habitat-lab/habitat/config/benchmark/nav/pointnav/pointnav_base.yaml
   - pointnav_base
+  # /habitat-lab/habitat-lab/habitat/config/habitat/dataset/pointnav/habitat_test.yaml
   - /habitat/dataset/pointnav: habitat_test
   - _self_
 
