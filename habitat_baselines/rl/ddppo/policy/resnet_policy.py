@@ -93,35 +93,52 @@ class ResNetEncoder(nn.Module):
     ):
         super().__init__()
 
-        if "rgb" in observation_space.spaces:
-            self._n_input_rgb = observation_space.spaces["rgb"].shape[2]
-            spatial_size = observation_space.spaces["rgb"].shape[0] // 2
-        else:
-            self._n_input_rgb = 0
+        # Determine which visual observations are present
+        self.visual_keys = [
+            k
+            for k, v in observation_space.spaces.items()
+            if len(v.shape) > 1 and k != ImageGoalSensor.cls_uuid
+        ]
+        self.key_needs_rescaling = {k: None for k in self.visual_keys}
+        for k, v in observation_space.spaces.items():
+            if v.dtype == np.uint8:
+                self.key_needs_rescaling[k] = 1.0 / v.high.max()
 
-        if "depth" in observation_space.spaces:
-            self._n_input_depth = observation_space.spaces["depth"].shape[2]
-            spatial_size = observation_space.spaces["depth"].shape[0] // 2
-        else:
-            self._n_input_depth = 0
+        # Count total # of channels
+        self._n_input_channels = sum(
+            observation_space.spaces[k].shape[2] for k in self.visual_keys
+        )
 
         if normalize_visual_inputs:
             self.running_mean_and_var: nn.Module = RunningMeanAndVar(
-                self._n_input_depth + self._n_input_rgb
+                self._n_input_channels
             )
         else:
             self.running_mean_and_var = nn.Sequential()
 
         if not self.is_blind:
-            input_channels = self._n_input_depth + self._n_input_rgb
-            self.backbone = make_backbone(input_channels, baseplanes, ngroups)
+            spatial_size_h = (
+                observation_space.spaces[self.visual_keys[0]].shape[0] // 2
+            )
+            spatial_size_w = (
+                observation_space.spaces[self.visual_keys[0]].shape[1] // 2
+            )
+            self.backbone = make_backbone(
+                self._n_input_channels, baseplanes, ngroups
+            )
 
-            final_spatial = int(
-                spatial_size * self.backbone.final_spatial_compress
+            final_spatial_h = int(
+                np.ceil(spatial_size_h * self.backbone.final_spatial_compress)
+            )
+            final_spatial_w = int(
+                np.ceil(spatial_size_w * self.backbone.final_spatial_compress)
             )
             after_compression_flat_size = 2048
             num_compression_channels = int(
-                round(after_compression_flat_size / (final_spatial ** 2))
+                round(
+                    after_compression_flat_size
+                    / (final_spatial_h * final_spatial_w)
+                )
             )
             self.compression = nn.Sequential(
                 nn.Conv2d(
@@ -137,13 +154,13 @@ class ResNetEncoder(nn.Module):
 
             self.output_shape = (
                 num_compression_channels,
-                final_spatial,
-                final_spatial,
+                final_spatial_h,
+                final_spatial_w,
             )
 
     @property
     def is_blind(self):
-        return self._n_input_rgb + self._n_input_depth == 0
+        return self._n_input_channels == 0
 
     def layer_init(self):
         for layer in self.modules():
@@ -159,28 +176,28 @@ class ResNetEncoder(nn.Module):
             return None
 
         cnn_input = []
-        if self._n_input_rgb > 0:
-            rgb_observations = observations["rgb"]
-            # permute tensor to dimension [BATCH x CHANNEL x HEIGHT X WIDTH]
-            rgb_observations = rgb_observations.permute(0, 3, 1, 2)
-            rgb_observations = (
-                rgb_observations.float() / 255.0
-            )  # normalize RGB
-            cnn_input.append(rgb_observations)
+        for k in self.visual_keys:
+            obs_k = observations[k]
+            # permute tensor [n_envs, height, width, channels(1)]
+            # to dimension [BATCH x CHANNEL x HEIGHT X WIDTH]
+            obs_k = obs_k.permute(0, 3, 1, 2)
+            if self.key_needs_rescaling[k] is not None:
+                obs_k = (
+                    obs_k.float() * self.key_needs_rescaling[k]
+                )  # normalize
+            cnn_input.append(obs_k)
 
-        if self._n_input_depth > 0:
-            depth_observations = observations["depth"]
-
-            # permute tensor to dimension [BATCH x CHANNEL x HEIGHT X WIDTH]
-            depth_observations = depth_observations.permute(0, 3, 1, 2)
-
-            cnn_input.append(depth_observations)
-
+        # n_envs x (3+1) x height x width
         x = torch.cat(cnn_input, dim=1)
+
+        # n_envs x (3+1) x height/2 x width/2
         x = F.avg_pool2d(x, 2)
 
         x = self.running_mean_and_var(x)
+
+        # Resnet50 as backbone
         x = self.backbone(x)
+
         x = self.compression(x)
         return x
 
