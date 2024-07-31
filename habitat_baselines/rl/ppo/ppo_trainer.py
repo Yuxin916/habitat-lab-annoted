@@ -72,6 +72,7 @@ class PPOTrainer(BaseRLTrainer):
     actor_critic: Policy
 
     def __init__(self, config=None):
+        # different algo should have different CHECKPOINT_FOLDER to resume training
         resume_state = load_resume_state(config)
         if resume_state is not None:
             config = resume_state["config"]
@@ -126,6 +127,7 @@ class PPOTrainer(BaseRLTrainer):
         """
         logger.add_filehandler(self.config.LOG_FILE)
 
+        # 根据register初始化policy -> resnet_policy.py
         policy = baseline_registry.get_policy(self.config.RL.POLICY.name)
         observation_space = self.obs_space
         self.obs_transforms = get_active_obs_transforms(self.config)
@@ -149,7 +151,7 @@ class PPOTrainer(BaseRLTrainer):
         if self.config.RL.DDPPO.pretrained:
             self.actor_critic.load_state_dict(
                 {
-                    k[len("actor_critic.") :]: v
+                    k[len("actor_critic."):]: v
                     for k, v in pretrained_state["state_dict"].items()
                 }
             )
@@ -157,7 +159,7 @@ class PPOTrainer(BaseRLTrainer):
             prefix = "actor_critic.net.visual_encoder."
             self.actor_critic.net.visual_encoder.load_state_dict(
                 {
-                    k[len(prefix) :]: v
+                    k[len(prefix):]: v
                     for k, v in pretrained_state["state_dict"].items()
                     if k.startswith(prefix)
                 }
@@ -189,19 +191,24 @@ class PPOTrainer(BaseRLTrainer):
         if config is None:
             config = self.config
 
+        # 初始化创建环境
         self.envs = construct_envs(
             config,
+            # 获取register好的env class 封装好 - environments.py
             get_env_class(config.ENV_NAME),
             workers_ignore_signals=is_slurm_batch_job(),
         )
 
     def _init_train(self):
+        # false
         if self.config.RL.DDPPO.force_distributed:
             self._is_distributed = True
 
+        # false
         if is_slurm_batch_job():
             add_signal_handlers()
 
+        # false
         if self._is_distributed:
             local_rank, tcp_store = init_distrib_slurm(
                 self.config.RL.DDPPO.distrib_backend
@@ -230,27 +237,36 @@ class PPOTrainer(BaseRLTrainer):
             )
             self.num_rollouts_done_store.set("num_done", "0")
 
+        # true
         if rank0_only() and self.config.VERBOSE:
-            logger.info(f"config: {self.config}")
+            logger.info(f"print config in ppo_trainer: "
+                        f"{self.config}")
 
+        # ?
         profiling_wrapper.configure(
             capture_start_step=self.config.PROFILING.CAPTURE_START_STEP,
             num_steps_to_capture=self.config.PROFILING.NUM_STEPS_TO_CAPTURE,
         )
 
+        # 初始化环境 vector env -> ObjNavRLEnv -> RL Env -> Env
         self._init_envs()
 
-        ppo_cfg = self.config.RL.PPO
+        # device
         if torch.cuda.is_available():
             self.device = torch.device("cuda", self.config.TORCH_GPU_ID)
             torch.cuda.set_device(self.device)
         else:
             self.device = torch.device("cpu")
 
+        # ?
         if rank0_only() and not os.path.isdir(self.config.CHECKPOINT_FOLDER):
             os.makedirs(self.config.CHECKPOINT_FOLDER)
 
+        # 获取ppo配置 | 初始化actor_critic网络
+        ppo_cfg = self.config.RL.PPO
         self._setup_actor_critic_agent(ppo_cfg)
+
+        # false
         if self._is_distributed:
             self.agent.init_distributed(find_unused_params=True)
 
@@ -261,6 +277,7 @@ class PPOTrainer(BaseRLTrainer):
         )
 
         obs_space = self.obs_space
+
         if self._static_encoder:
             self._encoder = self.actor_critic.net.visual_encoder
             obs_space = spaces.Dict(
@@ -365,8 +382,8 @@ class PPOTrainer(BaseRLTrainer):
                     {
                         k + "." + subk: subv
                         for subk, subv in cls._extract_scalars_from_info(
-                            v
-                        ).items()
+                        v
+                    ).items()
                         if (k + "." + subk) not in cls.METRICS_BLACKLIST
                     }
                 )
@@ -404,6 +421,10 @@ class PPOTrainer(BaseRLTrainer):
                 self.rollouts.current_rollout_step_idxs[buffer_index],
                 env_slice,
             ]
+            """
+            step_batch -> TensorDict of 9 items
+            observations: TensorDict
+            """
 
             profiling_wrapper.range_push("compute actions")
             (
@@ -486,8 +507,12 @@ class PPOTrainer(BaseRLTrainer):
 
         self.current_episode_reward[env_slice] += rewards
         current_ep_reward = self.current_episode_reward[env_slice]
-        self.running_episode_stats["reward"][env_slice] += current_ep_reward.where(done_masks, current_ep_reward.new_zeros(()))  # type: ignore
-        self.running_episode_stats["count"][env_slice] += done_masks.float()  # type: ignore
+        self.running_episode_stats["reward"][
+            env_slice] += current_ep_reward.where(done_masks,
+                                                  current_ep_reward.new_zeros(
+                                                      ()))  # type: ignore
+        self.running_episode_stats["count"][
+            env_slice] += done_masks.float()  # type: ignore
         for k, v_k in self._extract_scalars_from_infos(infos).items():
             v = torch.tensor(
                 v_k,
@@ -499,7 +524,9 @@ class PPOTrainer(BaseRLTrainer):
                     self.running_episode_stats["count"]
                 )
 
-            self.running_episode_stats[k][env_slice] += v.where(done_masks, v.new_zeros(()))  # type: ignore
+            self.running_episode_stats[k][env_slice] += v.where(done_masks,
+                                                                v.new_zeros(
+                                                                    ()))  # type: ignore
 
         self.current_episode_reward[env_slice].masked_fill_(done_masks, 0.0)
 
@@ -682,6 +709,7 @@ class PPOTrainer(BaseRLTrainer):
             None
         """
 
+        # 初始化环境 | 初始化actor_critic_agent | 初始化buffer | reset envs
         self._init_train()
 
         count_checkpoints = 0
@@ -771,6 +799,7 @@ class PPOTrainer(BaseRLTrainer):
 
                 profiling_wrapper.range_push("_collect_rollout_step")
                 for buffer_index in range(self._nbuffers):
+                    # collect rollout step
                     self._compute_actions_and_step_envs(buffer_index)
 
                 for step in range(ppo_cfg.num_steps):

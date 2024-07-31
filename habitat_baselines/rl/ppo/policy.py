@@ -45,9 +45,12 @@ class Policy(nn.Module, metaclass=abc.ABCMeta):
         masks,
         deterministic=False,
     ):
+        # feature extraction
         features, rnn_hidden_states = self.net(
             observations, rnn_hidden_states, prev_actions, masks
         )
+
+        # get action distribution and value
         distribution = self.action_distribution(features)
         value = self.critic(features)
 

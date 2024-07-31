@@ -28,6 +28,7 @@ def make_env_fn(
     dataset = make_dataset(
         config.TASK_CONFIG.DATASET.TYPE, config=config.TASK_CONFIG.DATASET
     )
+    # 进入env_class的构造函数 初始化
     env = env_class(config=config, dataset=dataset)
     env.seed(config.TASK_CONFIG.SEED)
     return env
@@ -49,10 +50,15 @@ def construct_envs(
 
     :return: VectorEnv object created according to specification.
     """
-
-    num_environments = config.NUM_ENVIRONMENTS
     configs = []
+
+    # 线程个数
+    num_environments = config.NUM_ENVIRONMENTS
+
+    # num_environments个env_class - register好的env class
     env_classes = [env_class for _ in range(num_environments)]
+
+    # 获取dataset - val 36
     dataset = make_dataset(config.TASK_CONFIG.DATASET.TYPE)
     scenes = config.TASK_CONFIG.DATASET.CONTENT_SCENES
     if "*" in config.TASK_CONFIG.DATASET.CONTENT_SCENES:
@@ -72,9 +78,11 @@ def construct_envs(
                     num_environments, len(scenes)
                 )
             )
-
+        # make sure the scene number > env number
+        # 打乱scenes的顺序
         random.shuffle(scenes)
 
+    # 给每个线程分配scenes (4 * 9)
     scene_splits: List[List[str]] = [[] for _ in range(num_environments)]
     for idx, scene in enumerate(scenes):
         scene_splits[idx % len(scene_splits)].append(scene)
@@ -85,6 +93,7 @@ def construct_envs(
         proc_config = config.clone()
         proc_config.defrost()
 
+        # 每个线程的seed不一样
         task_config = proc_config.TASK_CONFIG
         task_config.SEED = task_config.SEED + i
         if len(scenes) > 0:
@@ -94,13 +103,19 @@ def construct_envs(
             config.SIMULATOR_GPU_ID
         )
 
+        # TODO: double check for multi agent
         task_config.SIMULATOR.AGENT_0.SENSORS = config.SENSORS
 
         proc_config.freeze()
         configs.append(proc_config)
 
-    envs = habitat.VectorEnv(
+    # use VectorEnv for better performance
+    # use ThreadedVectorEnv for debug each individual env
+    envs = habitat.ThreadedVectorEnv(
+        # 封装好的函数
         make_env_fn=make_env_fn,
+        # 封装好的函数
+        # 线程个数个tuple, each tuple contains a config and a env_class function (ObjNavRLEnv)
         env_fn_args=tuple(zip(configs, env_classes)),
         workers_ignore_signals=workers_ignore_signals,
     )

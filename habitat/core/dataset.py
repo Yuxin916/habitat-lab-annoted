@@ -55,6 +55,14 @@ class Episode:
 
     episode_id: str = attr.ib(default=None, validator=not_none_validator)
     scene_id: str = attr.ib(default=None, validator=not_none_validator)
+    # path to the SceneDataset config file
+    scene_dataset_config: str = attr.ib(
+        default="default", validator=not_none_validator
+    )
+    # list of paths to search for object config files in addition to the SceneDataset
+    additional_obj_config_paths: List[str] = attr.ib(
+        default=[], validator=not_none_validator
+    )
     start_position: List[float] = attr.ib(
         default=None, validator=not_none_validator
     )
@@ -63,6 +71,16 @@ class Episode:
     )
     info: Optional[Dict[str, Any]] = None
     _shortest_path_cache: Any = attr.ib(init=False, default=None)
+
+    # NB: This method is marked static despite taking self so that
+    # on_setattr=Episode._reset_shortest_path_cache_hook works as attrs
+    # will pass the instance as the first argument!
+    @staticmethod
+    def _reset_shortest_path_cache_hook(
+        self: "Episode", attribute: attr.Attribute, value: Any
+    ) -> Any:
+        self._shortest_path_cache = None
+        return value
 
     def __getstate__(self):
         return {
@@ -151,7 +169,7 @@ class Dataset(Generic[T]):
         """
         return [self.episodes[episode_id] for episode_id in indexes]
 
-    def get_episode_iterator(self, *args: Any, **kwargs: Any) -> Iterator:
+    def get_episode_iterator(self, *args: Any, **kwargs: Any) -> Iterator[T]:
         r"""Gets episode iterator with options. Options are specified in
         :ref:`EpisodeIterator` documentation.
 
@@ -280,7 +298,7 @@ class Dataset(Generic[T]):
 
         rand_items = np.random.choice(
             self.num_episodes, num_episodes, replace=False
-        )
+        ).tolist()
         if collate_scene_ids:
             scene_ids: Dict[str, List[int]] = {}
             for rand_ind in rand_items:
@@ -307,7 +325,7 @@ class Dataset(Generic[T]):
         return new_datasets
 
 
-class EpisodeIterator(Iterator):
+class EpisodeIterator(Iterator[T]):
     r"""Episode Iterator class that gives options for how a list of episodes
     should be iterated.
 
@@ -374,8 +392,8 @@ class EpisodeIterator(Iterator):
 
         # sample episodes
         if num_episode_sample >= 0:
-            episodes = np.random.choice(
-                episodes, num_episode_sample, replace=False
+            episodes = np.random.choice(  # type: ignore[assignment]
+                episodes, num_episode_sample, replace=False  # type: ignore[arg-type]
             )
 
         if not isinstance(episodes, list):

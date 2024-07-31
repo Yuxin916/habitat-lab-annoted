@@ -40,12 +40,10 @@ class Env:
     observation_space: spaces.Dict
     action_space: spaces.Dict
     _config: Config
-    _dataset: Optional[Dataset]
+    _dataset: Optional[Dataset[Episode]]
     number_of_episodes: Optional[int]
-    _episodes: List[Episode]
-    _current_episode_index: Optional[int]
     _current_episode: Optional[Episode]
-    _episode_iterator: Optional[Iterator]
+    _episode_iterator: Optional[Iterator[Episode]]
     _sim: Simulator
     _task: EmbodiedTask
     _max_episode_seconds: int
@@ -53,9 +51,11 @@ class Env:
     _elapsed_steps: int
     _episode_start_time: Optional[float]
     _episode_over: bool
+    _episode_from_iter_on_reset: bool
+    _episode_force_changed: bool
 
     def __init__(
-        self, config: Config, dataset: Optional[Dataset] = None
+        self, config: Config, dataset: Optional[Dataset[Episode]] = None
     ) -> None:
         """Constructor
 
@@ -74,9 +74,15 @@ class Env:
         self._config = config
         self._dataset = dataset
         self._current_episode_index = None
+        # 在没有dataset传进来的时候
+        # 根据config文件中的dataset配置，创建dataset
         if self._dataset is None and config.DATASET.TYPE:
+            # @registry.register_dataset(name="ObjectNav-v1")
+            # /habitat-lab/habitat-lab/habitat/datasets/object_nav/object_nav_dataset.py
+            # 获取self.episode
             self._dataset = make_dataset(
-                id_dataset=config.DATASET.TYPE, config=config.DATASET
+                id_dataset=config.DATASET.TYPE,
+                config=config.DATASET
             )
         self._episodes = (
             self._dataset.episodes
@@ -84,31 +90,44 @@ class Env:
             else cast(List[Episode], [])
         )
         self._current_episode = None
-        iter_option_dict = {
-            k.lower(): v
-            for k, v in config.ENVIRONMENT.ITERATOR_OPTIONS.items()
-        }
-        iter_option_dict["seed"] = config.SEED
-        self._episode_iterator = self._dataset.get_episode_iterator(
-            **iter_option_dict
-        )
+        self._episode_iterator = None
+        self._episode_from_iter_on_reset = True
+        self._episode_force_changed = False
 
         # load the first scene if dataset is present
         if self._dataset:
             assert (
                 len(self._dataset.episodes) > 0
             ), "dataset should have non-empty episodes list"
+            self._setup_episode_iterator()
+            self.current_episode = next(self.episode_iterator)
             self._config.defrost()
-            self._config.SIMULATOR.SCENE = self._dataset.episodes[0].scene_id
+            # self._config.SIMULATOR.SCENE_DATASET = (
+            #     self.current_episode.scene_dataset_config
+            # )
+            self._config.SIMULATOR.SCENE = self.current_episode.scene_id
+            self._config.SIMULATOR.ADDITIONAL_OBJECT_PATHS = (
+                self.current_episode.additional_obj_config_paths
+            )
             self._config.freeze()
 
-            self.number_of_episodes = len(self._dataset.episodes)
+            self.number_of_episodes = len(self.episodes)
         else:
             self.number_of_episodes = None
 
+        # 通过config文件中的simulator配置，创建simulator
+        # 通过registry，创建simulator
+        # @registry.register_simulator(name="Sim-v0")
+        # /habitat-lab/habitat-lab/habitat/sims/habitat_simulator line 245
         self._sim = make_sim(
-            id_sim=self._config.SIMULATOR.TYPE, config=self._config.SIMULATOR
+            id_sim=self._config.SIMULATOR.TYPE,
+            config=self._config.SIMULATOR
         )
+
+        # 通过config文件中的task配置，创建task
+        # 通过registry，创建task
+        # @registry.register_task(name="Nav-v0")
+        # /habitat-lab/habitat-lab/habitat/core/embodied_task.py
         self._task = make_task(
             self._config.TASK.TYPE,
             config=self._config.TASK,
@@ -122,13 +141,31 @@ class Env:
             }
         )
         self.action_space = self._task.action_space
+
+        # 一个episode的最长时间 wallclock time
         self._max_episode_seconds = (
             self._config.ENVIRONMENT.MAX_EPISODE_SECONDS
         )
+        # 一个episode的最大步数
         self._max_episode_steps = self._config.ENVIRONMENT.MAX_EPISODE_STEPS
+        # 一个episode的agent数量
+        self.num_agents = len(self._config.SIMULATOR.AGENTS)
+
+        # 一些数据
         self._elapsed_steps = 0
         self._episode_start_time: Optional[float] = None
         self._episode_over = False
+
+    def _setup_episode_iterator(self):
+        assert self._dataset is not None
+        iter_option_dict = {
+            k.lower(): v
+            for k, v in self._config.ENVIRONMENT.ITERATOR_OPTIONS.items()
+        }
+        iter_option_dict["seed"] = self._config.SEED
+        self._episode_iterator = self._dataset.get_episode_iterator(
+            **iter_option_dict
+        )
 
     @property
     def current_episode(self) -> Episode:
@@ -138,14 +175,20 @@ class Env:
     @current_episode.setter
     def current_episode(self, episode: Episode) -> None:
         self._current_episode = episode
+        # This allows the current episode to be set here
+        # and then reset be called without the episode changing
+        self._episode_from_iter_on_reset = False
+        self._episode_force_changed = True
 
     @property
-    def episode_iterator(self) -> Iterator:
+    def episode_iterator(self) -> Iterator[Episode]:
         return self._episode_iterator
 
     @episode_iterator.setter
-    def episode_iterator(self, new_iter: Iterator) -> None:
+    def episode_iterator(self, new_iter: Iterator[Episode]) -> None:
         self._episode_iterator = new_iter
+        self._episode_force_changed = True
+        self._episode_from_iter_on_reset = True
 
     @property
     def episodes(self) -> List[Episode]:
@@ -156,7 +199,14 @@ class Env:
         assert (
             len(episodes) > 0
         ), "Environment doesn't accept empty episodes list."
-        self._episodes = episodes
+        assert (
+            self._dataset is not None
+        ), "Environment must have a dataset to set episodes"
+        self._dataset.episodes = episodes
+        self._setup_episode_iterator()
+        self._current_episode = None
+        self._episode_force_changed = True
+        self._episode_from_iter_on_reset = True
 
     @property
     def sim(self) -> Simulator:
@@ -172,6 +222,7 @@ class Env:
 
     @property
     def task(self) -> EmbodiedTask:
+        # 指向EmbodiedTask
         return self._task
 
     @property
@@ -185,17 +236,13 @@ class Env:
         return self._task.measurements.get_metrics()
 
     def _past_limit(self) -> bool:
-        if (
+        return (
             self._max_episode_steps != 0
             and self._max_episode_steps <= self._elapsed_steps
-        ):
-            return True
-        elif (
+        ) or (
             self._max_episode_seconds != 0
             and self._max_episode_seconds <= self._elapsed_seconds
-        ):
-            return True
-        return False
+        )
 
     def _reset_stats(self) -> None:
         self._episode_start_time = time.time()
@@ -207,19 +254,48 @@ class Env:
 
         :return: initial observations from the environment.
         """
+        ############################################################
+        # reset一些数据 - episode开始时间，episode结束标志，episode步数
         self._reset_stats()
+        ############################################################
 
-        assert len(self.episodes) > 0, "Episodes list is empty"
         # Delete the shortest path cache of the current episode
         # Caching it for the next time we see this episode isn't really worth
         # it
         if self._current_episode is not None:
             self._current_episode._shortest_path_cache = None
 
-        self._current_episode = next(self._episode_iterator)
+        if (
+            self._episode_iterator is not None
+            and self._episode_from_iter_on_reset
+        ):
+            self._current_episode = next(self._episode_iterator)
+
+        # This is always set to true after a reset that way
+        # on the next reset an new episode is taken (if possible)
+        self._episode_from_iter_on_reset = True
+        self._episode_force_changed = False
+
+        assert self._current_episode is not None, "Reset requires an episode"
+
+        # 在每次reset环境的时候 覆盖_task里面的config
         self.reconfigure(self._config)
 
+        # 在embodied_task.py中reset
+        """
+        observations是一个list of 2 agents
+        Each agent has a dict of observations (all ndarray)
+            'rgb': (480, 640, 3)
+            'depth': (480, 640, 1)
+            'objectgoal': (1,)
+            'compass': (1,)
+            'gps': (2,)
+
+        两个agent初始化在一个点 但是朝向不同
+        """
         observations = self.task.reset(episode=self.current_episode)
+
+        # reset所有measurements
         self._task.measurements.reset_measures(
             episode=self.current_episode,
             task=self.task,
@@ -230,8 +306,14 @@ class Env:
 
     def _update_step_stats(self) -> None:
         self._elapsed_steps += 1
+        # 是否episode结束
+        # 1. STOP动作被执行 - both linear/angular speed are below their threshold
         self._episode_over = not self._task.is_episode_active
+        # if self._episode_over:
+        #     print("DEBUG - env.py _update_step_stats -> STOP Called")
+        # 是否超出episode的最大步数或者时间
         if self._past_limit():
+            # print("DEBUG - env.py _update_step_stats -> Past Limit")
             self._episode_over = True
 
         if self.episode_iterator is not None and isinstance(
@@ -258,9 +340,12 @@ class Env:
         assert (
             self._episode_over is False
         ), "Episode over, call reset before calling step"
+        assert (
+            not self._episode_force_changed
+        ), "Episode was changed either by setting current_episode or changing the episodes list. Call reset before stepping the environment again."
 
         # Support simpler interface as well
-        if isinstance(action, (str, int, np.integer)):
+        if isinstance(action, (str, int, np.integer, List)):
             action = {"action": action}
 
         observations = self.task.step(
@@ -292,14 +377,20 @@ class Env:
         self._task.seed(seed)
 
     def reconfigure(self, config: Config) -> None:
+        # 在每次reset环境的时候
+        # 根据当前的episode信息
+        # 覆盖_task里面的config
+
         self._config = config
 
         self._config.defrost()
         self._config.SIMULATOR = self._task.overwrite_sim_config(
-            self._config.SIMULATOR, self.current_episode
+            self._config.SIMULATOR, self.current_episode, self._sim
         )
         self._config.freeze()
 
+        # habitat_simulator 根据当前的episode信息
+        # 更新sim_config和agent_state
         self._sim.reconfigure(self._config.SIMULATOR)
 
     def render(self, mode="rgb") -> np.ndarray:

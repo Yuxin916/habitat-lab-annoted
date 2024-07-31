@@ -162,6 +162,12 @@ def batch_obs(
         batch: DefaultDict[str, List] = defaultdict(list)
 
     obs = observations[0]
+    if len(obs) == 1:
+        # single agent
+        obs = obs[0]
+    else:
+        # multi-agent
+        raise NotImplementedError("Multi-agent batching not implemented")
     # Order sensors by size, stack and move the largest first
     sensor_names = sorted(
         obs.keys(),
@@ -173,6 +179,10 @@ def batch_obs(
 
     for sensor_name in sensor_names:
         for i, obs in enumerate(observations):
+            if len(obs) == 1:
+                obs = obs[0]
+            else:
+                raise NotImplementedError("Multi-agent batching not implemented")
             sensor = obs[sensor_name]
             if cache is None:
                 batch[sensor_name].append(torch.as_tensor(sensor))

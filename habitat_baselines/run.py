@@ -14,7 +14,11 @@ from habitat.config import Config
 from habitat_baselines.common.baseline_registry import baseline_registry
 from habitat_baselines.config.default import get_config
 
-
+"""
+add to the end of the command:
+    --run-type train --exp-config habitat_baselines/config/objectnav/ddppo_objectnav.yaml
+    --run-type eval --exp-config habitat_baselines/config/objectnav/ddppo_objectnav.yaml
+"""
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -46,16 +50,21 @@ def execute_exp(config: Config, run_type: str) -> None:
     config: Habitat.config
     runtype: str {train or eval}
     """
+    # set seed (fixed)
     random.seed(config.TASK_CONFIG.SEED)
     np.random.seed(config.TASK_CONFIG.SEED)
     torch.manual_seed(config.TASK_CONFIG.SEED)
     if config.FORCE_TORCH_SINGLE_THREADED and torch.cuda.is_available():
         torch.set_num_threads(1)
 
+    # initialize trainer
     trainer_init = baseline_registry.get_trainer(config.TRAINER_NAME)
     assert trainer_init is not None, f"{config.TRAINER_NAME} is not supported"
+
+    # initialize trainer
     trainer = trainer_init(config)
 
+    # start training or evaluation -> ppo_trainer.py
     if run_type == "train":
         trainer.train()
     elif run_type == "eval":

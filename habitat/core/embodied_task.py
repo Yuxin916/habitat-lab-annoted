@@ -20,6 +20,8 @@ from habitat.core.spaces import ActionSpace, EmptySpace, Space
 
 class Action:
     r"""
+    SimulatorTaskAction类继承自Action类
+
     An action that can be performed by an agent solving a task in environment.
     For example for navigation task action classes will be:
     ``MoveForwardAction, TurnLeftAction, TurnRightAction``. The action can
@@ -55,6 +57,7 @@ class Action:
 
 class SimulatorTaskAction(Action):
     r"""
+    所有的动作都会继承这个类
     An ``EmbodiedTask`` action that is wrapping simulator action.
     """
 
@@ -119,6 +122,7 @@ class Measure:
 
         :return: the current metric for :ref:`Measure`.
         """
+        # 获得当前计算的数值
         return self._metric
 
 
@@ -146,6 +150,7 @@ class Measurements:
 
     def __init__(self, measures: Iterable[Measure]) -> None:
         """Constructor
+        整合所有以Measure为基类的类
 
         :param measures: list containing :ref:`Measure`, uuid of each
             :ref:`Measure` must be unique.
@@ -158,10 +163,17 @@ class Measurements:
             self.measures[measure.uuid] = measure
 
     def reset_measures(self, *args: Any, **kwargs: Any) -> None:
+        """
+        Reset所有的measure
+        """
         for measure in self.measures.values():
+            # 重置每一个measure
             measure.reset_metric(*args, **kwargs)
 
     def update_measures(self, *args: Any, **kwargs: Any) -> None:
+        """
+        更新所有的measure
+        """
         for measure in self.measures.values():
             measure.update_metric(*args, **kwargs)
 
@@ -228,10 +240,19 @@ class EmbodiedTask:
     ) -> None:
         from habitat.core.registry import registry
 
+        # sim里面只包含RGB，Depth等sensor
+        # gps, compass等sensor在task里面
+
         self._config = config
         self._sim = sim
         self._dataset = dataset
 
+        # 根据一系列metrics(config.measurements)
+        # 分别初始化对应的measurements
+        # 在nav.py里的NavigationTask类中，
+        # 比如 config.measurements = ['distance_to_goal', 'spl', 'success']
+        # 就会初始化对应的measurements函数 (在nav.py里的NavigationTask类中)
+        # 最后一个Measurements整合起来
         self.measurements = Measurements(
             self._init_entities(
                 entity_names=config.MEASUREMENTS,
@@ -240,6 +261,12 @@ class EmbodiedTask:
             ).values()
         )
 
+        # 根据一系列sensors(config.lab_sensors)
+        # 分别初始化对应的sensors
+        # 在nav.py里的NavigationTask类中，
+        # 比如 config.lab_sensors = ['objectgoal', 'gps', 'compass']
+        # 就会初始化对应的sensors函数 (在object_nav_task.py, 和nav.py里)
+        # 最后一个SensorSuite整合起来
         self.sensor_suite = SensorSuite(
             self._init_entities(
                 entity_names=config.SENSORS,
@@ -248,6 +275,11 @@ class EmbodiedTask:
             ).values()
         )
 
+        # 根据一系列actions(config.actions)
+        # 分别初始化对应的actions
+        # 在nav.py里的NavigationTask类中，
+        # 比如 config.actions = ['move_forward', 'turn_left', 'turn_right']
+        # 就会初始化对应的actions函数 (在nav.py里的NavigationTask类中)
         self.actions = self._init_entities(
             entity_names=config.POSSIBLE_ACTIONS,
             register_func=registry.get_task_action,
@@ -277,46 +309,93 @@ class EmbodiedTask:
         return entities
 
     def reset(self, episode: Episode):
+        # 从simulator里面获取observations( only rgb and depth)
         observations = self._sim.reset()
-        observations.update(
+        # modify as a list
+        [observations[i].update(
             self.sensor_suite.get_observations(
-                observations=observations, episode=episode, task=self
+                observations=observations[i], episode=episode, agent_id=i, task=self
             )
         )
+        for i in range(len(self._sim.habitat_config.AGENTS))]
 
         for action_instance in self.actions.values():
             action_instance.reset(episode=episode, task=self)
 
         return observations
 
-    def step(self, action: Dict[str, Any], episode: Episode):
-        if "action_args" not in action or action["action_args"] is None:
-            action["action_args"] = {}
-        action_name = action["action"]
+    def _step_single_action(
+        self,
+        observations: Any,
+        action_name: Any,
+        action: Dict[str, Any],
+        episode: Episode,
+        is_last_action=True,
+    ):
         if isinstance(action_name, (int, np.integer)):
             action_name = self.get_action_name(action_name)
         assert (
             action_name in self.actions
         ), f"Can't find '{action_name}' action in {self.actions.keys()}."
-
         task_action = self.actions[action_name]
-        observations = task_action.step(**action["action_args"], task=self)
         observations.update(
-            self.sensor_suite.get_observations(
-                observations=observations,
-                episode=episode,
-                action=action,
+            task_action.step(
+                **action["action_args"],
                 task=self,
+                is_last_action=is_last_action,
             )
         )
 
-        self._is_episode_active = self._check_episode_is_active(
-            observations=observations, action=action, episode=episode
-        )
+    def step(self, action: Dict[str, Any], episode: Episode):
+        action_name = action["action"]
+        if "action_args" not in action or action["action_args"] is None:
+            action["action_args"] = {}
+        observations: Any = {}
+        obs = []
+        if isinstance(action_name, List):  # there are multiple actions
+            if 0 in action_name:
+                task_action = self.actions["STOP"]
+                task_action.step(**action["action_args"], task=self)
+                obs = [self._sim.get_sensor_observations(agent_ids = i) for i in range(len(action_name))]
+            else:
+                obs = self._sim.step(action_name)
+                [obs[i].update(
+                    self.sensor_suite.get_observations(
+                        observations=obs[i],
+                        episode=episode,
+                        agent_id=i,
+                        task=self,
+                    )
+                ) for i in range(len(self._sim.habitat_config.AGENTS))]
 
-        return observations
+            self._is_episode_active = True
+            for i in range(len(action_name)):
+                if not self._is_episode_active:
+                    break
+                self._is_episode_active = self._is_episode_active and self._check_episode_is_active(
+                    observations=obs[i], action=action, episode=episode
+                )
 
-    def get_action_name(self, action_index: int):
+            return obs
+        else:
+            self._step_single_action(
+                observations, action_name, action, episode
+            )
+
+            observations.update(
+                self.sensor_suite.get_observations(
+                    observations=observations,
+                    episode=episode,
+                    action=action,
+                    task=self,
+                )
+            )
+            self._is_episode_active = self._check_episode_is_active(
+                observations=observations, action=action, episode=episode
+            )
+            return observations
+
+    def get_action_name(self, action_index: Union[int, np.integer]):
         if action_index >= len(self.actions):
             raise ValueError(f"Action index '{action_index}' is out of range.")
         return self._action_keys[action_index]

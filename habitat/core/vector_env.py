@@ -140,7 +140,9 @@ class VectorEnv:
 
     def __init__(
         self,
+        # create每个单独的环境
         make_env_fn: Callable[..., Union[Env, RLEnv]] = _make_env_fn,
+        # 线程个数个tuple, each tuple contains a config and a env_class function (ObjNavRLEnv)
         env_fn_args: Sequence[Tuple] = None,
         auto_reset_done: bool = True,
         multiprocessing_start_method: str = "forkserver",
@@ -180,7 +182,7 @@ class VectorEnv:
         (
             self._connection_read_fns,
             self._connection_write_fns,
-        ) = self._spawn_workers(  # noqa
+        ) = self._spawn_workers(
             env_fn_args,
             make_env_fn,
             workers_ignore_signals=workers_ignore_signals,
@@ -188,21 +190,25 @@ class VectorEnv:
 
         self._is_closed = False
 
+        # 获取env的observation_space, action_space, number_of_episodes
         for write_fn in self._connection_write_fns:
             write_fn((CALL_COMMAND, (OBSERVATION_SPACE_NAME, None)))
         self.observation_spaces = [
             read_fn() for read_fn in self._connection_read_fns
         ]
+
         for write_fn in self._connection_write_fns:
             write_fn((CALL_COMMAND, (ACTION_SPACE_NAME, None)))
         self.action_spaces = [
             read_fn() for read_fn in self._connection_read_fns
         ]
+
         for write_fn in self._connection_write_fns:
             write_fn((CALL_COMMAND, (NUMBER_OF_EPISODE_NAME, None)))
         self.number_of_episodes = [
             read_fn() for read_fn in self._connection_read_fns
         ]
+
         self._paused: List[Tuple] = []
 
     @property
@@ -230,6 +236,7 @@ class VectorEnv:
             signal.signal(signal.SIGUSR1, signal.SIG_IGN)
             signal.signal(signal.SIGUSR2, signal.SIG_IGN)
 
+        # 进入env_class的构造函数 初始化
         env = env_fn(*env_fn_args)
         if parent_pipe is not None:
             parent_pipe.close()
@@ -399,7 +406,7 @@ class VectorEnv:
     ) -> None:
         # Backward compatibility
         if isinstance(action, (int, np.integer, str)):
-            action = {"action": {"action": action}}
+            action = {"action": {"action": [action]}}
 
         self._warn_cuda_tensors(action)
         self._connection_write_fns[index_env]((STEP_COMMAND, action))
@@ -418,7 +425,9 @@ class VectorEnv:
         self.async_step_at(index_env, action)
         return self.wait_step_at(index_env)
 
-    def async_step(self, data: List[Union[int, str, Dict[str, Any]]]) -> None:
+    def async_step(
+        self, data: Sequence[Union[int, str, Dict[str, Any]]]
+    ) -> None:
         r"""Asynchronously step in the environments.
 
         :param data: list of size _num_envs containing keyword arguments to
@@ -436,7 +445,9 @@ class VectorEnv:
             self.wait_step_at(index_env) for index_env in range(self.num_envs)
         ]
 
-    def step(self, data: List[Union[int, str, Dict[str, Any]]]) -> List[Any]:
+    def step(
+        self, data: Sequence[Union[int, str, Dict[str, Any]]]
+    ) -> List[Any]:
         r"""Perform actions in the vectorized environments.
 
         :param data: list of size _num_envs containing keyword arguments to

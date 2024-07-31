@@ -125,6 +125,7 @@ def images_to_video(
     video_name = video_name.replace(" ", "_").replace("\n", "_") + ".mp4"
     writer = imageio.get_writer(
         os.path.join(output_dir, video_name),
+        format='ffmpeg',
         fps=fps,
         quality=quality,
         **kwargs,
