@@ -106,9 +106,9 @@ def example_get_topdown_map():
 
 
 def main():
-    example_pointnav_draw_target_birdseye_view()
+    # example_pointnav_draw_target_birdseye_view()
     example_get_topdown_map()
-    example_pointnav_draw_target_birdseye_view_agent_on_border()
+    # example_pointnav_draw_target_birdseye_view_agent_on_border()
 
 
 if __name__ == "__main__":

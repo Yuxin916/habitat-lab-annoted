@@ -7,6 +7,9 @@ __pycache__/
 
 # log files
 tb/
+tb_minival/
+video_dir/
+video_dir_minival/
 
 # Distribution / packaging
 .Python

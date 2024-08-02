@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 import habitat
 
-config = habitat.get_config(config_paths="configs/tasks/objectnav_hm3d_multi.yaml")
+config = habitat.get_config(config_paths="configs/tasks/objectnav_hm3d.yaml")
 # # To change config, defrost it first
 # config.defrost()
 # config.DATASET.SPLIT = "val"
@@ -79,9 +79,9 @@ def display_sample(rgb_obs, semantic_obs, depth_obs):
 
 config = habitat.get_config(config_paths="configs/tasks/objectnav_hm3d.yaml")
 config.defrost()
-config.DATASET.SPLIT = "val"
-config.SIMULATOR.SEMANTIC_SENSOR.HEIGHT = 256
-config.SIMULATOR.SEMANTIC_SENSOR.WIDTH = 256
+# config.DATASET.SPLIT = "val"
+# config.SIMULATOR.SEMANTIC_SENSOR.HEIGHT = 256
+# config.SIMULATOR.SEMANTIC_SENSOR.WIDTH = 256
 config.SIMULATOR.AGENT_0.SENSORS = ["RGB_SENSOR", "DEPTH_SENSOR", "SEMANTIC_SENSOR"]
 config.freeze()
 

@@ -18,6 +18,9 @@ from habitat_baselines.config.default import get_config
 add to the end of the command:
     --run-type train --exp-config habitat_baselines/config/objectnav/ddppo_objectnav.yaml
     --run-type eval --exp-config habitat_baselines/config/objectnav/ddppo_objectnav.yaml
+add to environment variables:
+    export GLOG_minloglevel=2
+    export MAGNUM_LOG=quiet
 """
 def main():
     parser = argparse.ArgumentParser()
