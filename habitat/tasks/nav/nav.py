@@ -843,7 +843,7 @@ class TopDownMap(Measure):
                         sem_scene.objects[object_id].id.split("_")[-1]
                     ) == int(
                         goal.object_id
-                    ), f"Object_id doesn't correspond to id in semantic scene objects dictionary for episode: {episode}"
+                    ) + 1, f"Object_id doesn't correspond to id in semantic scene objects dictionary for episode: {episode}"
 
                     center = sem_scene.objects[object_id].aabb.center
                     x_len, _, z_len = (
