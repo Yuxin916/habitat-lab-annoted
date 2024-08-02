@@ -84,6 +84,7 @@ class Env:
                 id_dataset=config.DATASET.TYPE,
                 config=config.DATASET
             )
+
         self._episodes = (
             self._dataset.episodes
             if self._dataset
@@ -192,7 +193,11 @@ class Env:
 
     @property
     def episodes(self) -> List[Episode]:
-        return self._episodes
+        return (
+            self._dataset.episodes
+            if self._dataset
+            else cast(List[Episode], [])
+        )
 
     @episodes.setter
     def episodes(self, episodes: List[Episode]) -> None:
