@@ -1807,7 +1807,7 @@ class SimulatorConfig(HabitatBaseConfig):
     renderer: RendererConfig = RendererConfig()
     # different action spaces
     action_space_config: str = "v0"
-    num_agents: int = 2
+    num_agents: int = 1
     tilt_angle: int = 30
     turn_angle_s: int = 10
 
