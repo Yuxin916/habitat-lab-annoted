@@ -546,11 +546,13 @@ class HabitatSim(habitat_sim.Simulator, Simulator):
         # if action is None:
         #     sim_obs = self.get_sensor_observations()
         # else:
-        actions: Any = {}
         # multi agent
         if len(self.habitat_config.agents) > 1:
+            actions: Any = {}
             for i in range(len(self.habitat_config.agents)):
                 actions[i] = action[i]
+        else:
+            actions = action
 
         # DEBUG Habitat_sim STEP FUNCTION
         try:
