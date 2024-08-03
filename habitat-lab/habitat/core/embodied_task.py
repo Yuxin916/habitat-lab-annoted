@@ -339,7 +339,7 @@ class EmbodiedTask:
         return entities
 
     def reset(self, episode: Episode):
-        # 从simulator里面获取observations
+        # 从simulator里面获取observations( only rgb and depth)
         observations = self._sim.reset()
 
         if self._sim.habitat_config.num_agents == 1:
@@ -354,6 +354,9 @@ class EmbodiedTask:
             )
             observations = [observations]
         elif self._sim.habitat_config.num_agents > 1:
+            # 根据config里面定义的sensor读取observations
+            # 比如 config.lab_sensors = ['objectgoal', 'gps', 'compass']
+            # get_observations对应的sensors函数 (在object_nav_task.py, nav.py, 和nav.py里)
             [observations[i].update(
                 self.sensor_suite.get_observations(
                     observations=observations[i],
