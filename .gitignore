@@ -4,7 +4,8 @@ __pycache__/
 
 # C extensions
 *.so
-
+log/
+ckpt/
 # Distribution / packaging
 .Python
 */env/
