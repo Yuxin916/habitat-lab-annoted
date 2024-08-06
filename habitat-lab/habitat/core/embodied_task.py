@@ -406,25 +406,7 @@ class EmbodiedTask:
 
         # if isinstance(action_name, tuple):  # there are multiple actions
         if isinstance(action_name, List) and len(action_name) > 1:  # there are multiple actions
-            # for a_name in action_name:
-            #     observations = self._step_single_action(
-            #         a_name,
-            #         action,
-            #         episode,
-            #     )
-
-            # if 0 in action_name:
-            #     task_action = self.actions["stop"]
-            #     task_action.step(**action["action_args"], task=self)
-            #     obs = [self._sim.get_sensor_observations(agent_ids=i) for i in
-            #            range(len(action_name))]
-            # else:
-            try:
-                obs = self._sim.step(action_name)
-            except Exception as e:
-                print('action_name: ', action_name)
-                print("Error in embodied_task: ", e)
-                print('EmbodiedTask.py: step')
+            obs = self._sim.step(action_name)
 
             [obs[i].update(
                 self.sensor_suite.get_observations(
@@ -441,43 +423,43 @@ class EmbodiedTask:
 
             # 分别检测两个agent是否active
             # nav.py
-            self._is_episode_active = self._check_episode_is_active(
-                observations=obs[0], action=action, episode=episode
-            ) and self._check_episode_is_active(
-                observations=obs[1], action=action, episode=episode
-            )
+            self._is_episode_active = True
+            for i in range(len(action_name)):
+                if not self._is_episode_active:
+                    break
+                self._is_episode_active = self._is_episode_active and self._check_episode_is_active(
+                    observations=obs[i],
+                    action=action,
+                    episode=episode
+                )
 
             # 直接返回obs 不进入下面
             return obs
 
         else:
-            raise NotImplementedError
+            # checked
             action['action'] = action_name[0]
             action_name = action["action"]
 
-            observations = self._step_single_action(
-                action_name, action, episode
-            )
+            obs = self._sim.step(action_name)
+            obs[0].update(self.sensor_suite.get_observations(
+                observations=obs,
+                episode=episode,
+                task=self,
+                agent_id=0,
+                should_time=True,
+            ))
 
-            self._sim.step_physics(1.0 / self._physics_target_sps)  # type:ignore
+            if action_name == 0:
+                task_action = self.actions["stop"]
+                task_action.step(**action["action_args"], task=self)
 
-            # havbitat simulators里面的step
-            if observations is None:
-                observations = self._sim.step(None)
-
-            observations.update(
-                self.sensor_suite.get_observations(
-                    observations=observations,
-                    episode=episode,
-                    action=action,
-                    task=self,
-                    should_time=True,
-                )
-            )
             self._is_episode_active = self._check_episode_is_active(
-                observations=observations, action=action, episode=episode
+                observations=obs,
+                action=action,
+                episode=episode
             )
-            return observations
+            return obs
 
     def get_action_name(self, action_index: Union[int, np.integer]):
         if action_index >= len(self.actions):

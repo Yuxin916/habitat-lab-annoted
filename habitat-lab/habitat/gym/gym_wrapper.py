@@ -252,7 +252,7 @@ class HabGymWrapper(gym.Wrapper):
 
     @add_perf_timing_func()
     def step(
-        self, action: Union[np.ndarray, int]
+        self, action: Union[np.ndarray, List[int]]
     ) -> Tuple[HabGymWrapperObsType, float, bool, dict]:
         assert self.action_space.contains(
             action
@@ -264,7 +264,8 @@ class HabGymWrapper(gym.Wrapper):
                 self.original_action_space, self.action_space, action
             )
         else:
-            hab_action = {"action": action}
+            hab_action = {"action": [action]}
+
         return self._direct_hab_step(hab_action)
 
     @property
@@ -274,8 +275,13 @@ class HabGymWrapper(gym.Wrapper):
     def current_episode(self, all_info: bool = False) -> "BaseEpisode":
         return self.env.current_episode(all_info)
 
-    def _direct_hab_step(self, action: Union[int, str, Dict[str, Any]]):
+    def _direct_hab_step(self, action: Union[List[int], str, Dict[str, Any]]):
         obs, reward, done, info = self.env.step(action=action)
+        # single agent
+        if len(obs) == 1:
+            obs = obs[0]
+        else:
+            raise NotImplementedError("Multi-agent environments not supported.")
         self._last_obs = obs
         obs = self._transform_obs(obs)
         return obs, reward, done, info
@@ -317,6 +323,11 @@ class HabGymWrapper(gym.Wrapper):
         self, *args, return_info: bool = False, **kwargs
     ) -> Union[HabGymWrapperObsType, Tuple[HabGymWrapperObsType, dict]]:
         obs = self.env.reset(*args, return_info=return_info, **kwargs)
+        # single agent
+        if len(obs) == 1:
+            obs = obs[0]
+        else:
+            raise NotImplementedError("Multi-agent environments not supported.")
         if return_info:
             obs, info = obs
             self._last_obs = obs

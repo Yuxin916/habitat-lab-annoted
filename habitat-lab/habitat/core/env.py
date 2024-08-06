@@ -21,7 +21,7 @@ from typing import (
 import gym
 import numba
 import numpy as np
-from gymnasium import spaces
+from gym import spaces
 
 from habitat.config import read_write
 from habitat.core.dataset import BaseEpisode, Dataset, Episode, EpisodeIterator
@@ -104,7 +104,7 @@ class Env:
         self._episode_from_iter_on_reset = True
         self._episode_force_changed = False
 
-        # TODO: 后面出问题了再看
+        # load the first scene if dataset is present
         if self._dataset:
             assert (
                 len(self._dataset.episodes) > 0
@@ -113,9 +113,10 @@ class Env:
             self._setup_episode_iterator()
             self.current_episode = next(self.episode_iterator)
             with read_write(self._config):
-                self._config.simulator.scene_dataset = (
-                    self.current_episode.scene_dataset_config
-                )
+                # uncomment this line to enable scene dataset override in config
+                # self._config.simulator.scene_dataset = (
+                #     self.current_episode.scene_dataset_config
+                # )
                 self._config.simulator.scene = self.current_episode.scene_id
 
             self.number_of_episodes = len(self.episodes)
@@ -145,12 +146,12 @@ class Env:
         # 合并sim和task的状态空间
             # sim里面只包含RGB，Depth等sensor
             # gps, compass等sensor在task里面
-        # self.observation_space = spaces.Dict(
-        #     {
-        #         **self._sim.sensor_suite.observation_spaces.spaces,
-        #         **self._task.sensor_suite.observation_spaces.spaces,
-        #     }
-        # )
+        self.observation_space = spaces.Dict(
+            {
+                **self._sim.sensor_suite.observation_spaces.spaces,
+                **self._task.sensor_suite.observation_spaces.spaces,
+            }
+        )
 
         # 从task中读取动作空间
         self.action_space = self._task.action_space
@@ -327,11 +328,11 @@ class Env:
         # 是否episode结束
         # 1. STOP动作被执行 - both linear/angular speed are below their threshold
         self._episode_over = not self._task.is_episode_active
-        if self._episode_over:
-            print("DEBUG - env.py _update_step_stats -> STOP Called")
+        # if self._episode_over:
+        #     print("DEBUG - env.py _update_step_stats -> STOP Called")
         # 是否超出episode的最大步数或者时间
         if self._past_limit():
-            print("DEBUG - env.py _update_step_stats -> Past Limit")
+            # print("DEBUG - env.py _update_step_stats -> Past Limit")
             self._episode_over = True
 
         if self.episode_iterator is not None and isinstance(
@@ -340,7 +341,7 @@ class Env:
             self.episode_iterator.step_taken()
 
     def step(
-        self, action: Union[int, str, Dict[str, Any]], **kwargs
+        self, action: Union[List[int], str, Dict[str, Any]], **kwargs
     ) -> Observations:
         r"""Perform an action in the environment and return observations.
 
@@ -364,7 +365,7 @@ class Env:
 
         # Support simpler interface as well
         if isinstance(action, (str, int, np.integer)):
-            action = {"action": action}
+            action = {"action": [action]}
 
         try:
             observations = self.task.step(

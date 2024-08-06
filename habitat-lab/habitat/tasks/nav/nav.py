@@ -33,6 +33,7 @@ from habitat.core.simulator import (
 )
 from habitat.core.spaces import ActionSpace
 from habitat.core.utils import not_none_validator, try_cv2_import
+from habitat.sims.habitat_simulator.actions import HabitatSimActions
 from habitat.tasks.utils import cartesian_to_polar
 from habitat.utils.geometry_utils import (
     quaternion_from_coeff,
@@ -840,8 +841,9 @@ class Success(Measure):
             DistanceToGoal.cls_uuid
         ].get_metric()
 
-        distance_to_target = min(distance_to_target)
-
+        # if distance_to_target is a list, multi-agent
+        if isinstance(distance_to_target, list):
+            distance_to_target = min(distance_to_target)
 
         if (
             hasattr(task, "is_stop_called")
@@ -907,27 +909,45 @@ class SPL(Measure):
     def update_metric(
         self, episode, task: EmbodiedTask, *args: Any, **kwargs: Any
     ):
-        self._metric = []
-        for i in range(self._sim.habitat_config.num_agents):
-            current_position = self._sim.get_agent_state(i).position
-            distance_to_target = task.measurements.measures[
-                DistanceToGoal.cls_uuid
-            ].get_metric()
+        if self._sim.habitat_config.num_agents == 1:
             ep_success = task.measurements.measures[
                 Success.cls_uuid].get_metric()
 
+            current_position = self._sim.get_agent_state().position
             self._agent_episode_distance += self._euclidean_distance(
                 current_position, self._previous_position
             )
 
             self._previous_position = current_position
 
-            self._metric.append(ep_success * (
-                self._start_end_episode_distance[i]
-                / max(self._start_end_episode_distance[i],
-                      self._agent_episode_distance)
+            self._metric = ep_success * (
+                self._start_end_episode_distance
+                / max(
+                self._start_end_episode_distance, self._agent_episode_distance
             )
-                                )
+            )
+        elif self._sim.habitat_config.num_agents > 1:
+            self._metric = []
+            for i in range(self._sim.habitat_config.num_agents):
+                current_position = self._sim.get_agent_state(i).position
+                distance_to_target = task.measurements.measures[
+                    DistanceToGoal.cls_uuid
+                ].get_metric()
+                ep_success = task.measurements.measures[
+                    Success.cls_uuid].get_metric()
+
+                self._agent_episode_distance += self._euclidean_distance(
+                    current_position, self._previous_position
+                )
+
+                self._previous_position = current_position
+
+                self._metric.append(ep_success * (
+                    self._start_end_episode_distance[i]
+                    / max(self._start_end_episode_distance[i],
+                          self._agent_episode_distance)
+                )
+                                    )
 
 
 @registry.register_measure
@@ -1306,7 +1326,7 @@ class DistanceToGoal(Measure):
 
         # 更新这个时刻的metric
         self.update_metric(episode=episode, *args, **kwargs)  # type: ignore
-        assert len(self._metric) == self._sim.habitat_config.num_agents
+        # assert len(self._metric) == self._sim.habitat_config.num_agents
 
     def update_metric(
         self, episode: NavigationEpisode, *args: Any, **kwargs: Any
@@ -1345,7 +1365,7 @@ class DistanceToGoal(Measure):
             )
 
         # 在reward的时候再计算最小的距离
-        self._metric = distance_to_target
+        self._metric = distance_to_target[0] if self._sim.habitat_config.num_agents == 1 else distance_to_target
 
         # print('Distance to target', self._metric)
 
@@ -1391,14 +1411,21 @@ class DistanceToGoalReward(Measure):
             DistanceToGoal.cls_uuid
         ].get_metric()
 
-        self._metric = []
-        for i in range(self._sim.habitat_config.num_agents):
-            # 更新reward
-            # -距离目标的距离
-            self._metric.append(-(distance_to_target[i]))
-            self._previous_distance[i] = distance_to_target[i]
+        if self._sim.habitat_config.num_agents == 1:
+            distance_to_target = task.measurements.measures[
+                DistanceToGoal.cls_uuid
+            ].get_metric()
+            self._metric = -(distance_to_target - self._previous_distance)
+            self._previous_distance = distance_to_target
+        else:
+            self._metric = []
+            for i in range(self._sim.habitat_config.num_agents):
+                # 更新reward
+                # -距离目标的距离
+                self._metric.append(-(distance_to_target[i]))
+                self._previous_distance[i] = distance_to_target[i]
 
-        # print('Distance to goal reward:', self._metric)
+            # print('Distance to goal reward:', self._metric)
 
 
 @registry.register_measure

@@ -574,7 +574,7 @@ class HabitatSim(habitat_sim.Simulator, Simulator):
                         in range(len(self.habitat_config.agents))]
             else:
                 # single agent
-                return self._sensor_suite.get_observations(sim_obs)
+                return [self._sensor_suite.get_observations(sim_obs)]
 
     def render(self, mode: str = "rgb") -> Any:
         r"""
