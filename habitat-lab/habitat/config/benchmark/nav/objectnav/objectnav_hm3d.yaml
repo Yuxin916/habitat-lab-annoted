@@ -37,3 +37,4 @@ habitat:
     habitat_sim_v0:
       gpu_device_id: 0
       allow_sliding: False
+    scene_dataset: "/home/tsaisplus/mrs_llm/clean_habitat_v2/habitat-lab/data/scene_datasets/hm3d_v0.2/hm3d_annotated_basis.scene_dataset_config.json"
