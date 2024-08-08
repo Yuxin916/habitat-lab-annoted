@@ -24,9 +24,7 @@ if TYPE_CHECKING:
 --config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.evaluate=False
 
 add HABITAT_ENV_DEBUG=1 to environment variables to enable debug logging
-GLOG_minloglevel=2
-MAGNUM_LOG=quiet
-HABITAT_SIM_LOG=quiet
+HABITAT_ENV_DEBUG=1;GLOG_minloglevel=2;MAGNUM_LOG=quiet;HABITAT_SIM_LOG=quiet;HF_HOME=/home/tsaisplus/mrs_llm/myproject/spatial_bot_test
 """
 
 @hydra.main(
