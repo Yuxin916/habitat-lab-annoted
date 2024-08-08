@@ -8,3 +8,7 @@ from .resnet_policy import (  # noqa: F401.
     PointNavResNetNet,
     PointNavResNetPolicy,
 )
+from .foundation_policy import (  # noqa: F401.
+ObjectNavSpatialNet,
+SpatialBotPolicy,
+)
