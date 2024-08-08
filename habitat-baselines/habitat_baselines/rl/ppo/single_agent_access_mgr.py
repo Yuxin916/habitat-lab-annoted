@@ -16,6 +16,8 @@ from habitat_baselines.common.storage import Storage
 from habitat_baselines.rl.ddppo.policy import (  # noqa: F401.
     PointNavResNetNet,
     PointNavResNetPolicy,
+    ObjectNavSpatialNet,
+    SpatialBotPolicy,
 )
 from habitat_baselines.rl.hrl.hierarchical_policy import (  # noqa: F401.
     HierarchicalPolicy,
@@ -224,8 +226,9 @@ class SingleAgentAccessMgr(AgentAccessMgr):
                 }
             )
         if self._is_static_encoder:
-            for param in actor_critic.visual_encoder.parameters():
-                param.requires_grad_(False)
+            with torch.no_grad():
+                for param in actor_critic.visual_encoder.parameters():
+                    param.requires_grad_(False)
 
         if self._config.habitat_baselines.rl.ddppo.reset_critic:
             nn.init.orthogonal_(actor_critic.critic.fc.weight)
@@ -301,15 +304,32 @@ def get_rollout_obs_space(obs_space, actor_critic, config):
 
     if not config.habitat_baselines.rl.ddppo.train_encoder:
         encoder = actor_critic.visual_encoder
-        obs_space = spaces.Dict(
-            {
-                PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY: spaces.Box(
-                    low=np.finfo(np.float32).min,
-                    high=np.finfo(np.float32).max,
-                    shape=encoder.output_shape,
-                    dtype=np.float32,
-                ),
-                **obs_space.spaces,
-            }
-        )
+        if encoder.__class__.__name__ == 'SpatialVLMEncoder':
+            obs_space = spaces.Dict(
+                {
+                    ObjectNavSpatialNet.PRETRAINED_VISUAL_FEATURES_KEY: spaces.Box(
+                        low=np.finfo(np.float32).min,
+                        high=np.finfo(np.float32).max,
+                        shape=encoder.output_shape,
+                        dtype=np.float32,
+                    ),
+                    **obs_space.spaces,
+                }
+            )
+        elif encoder.__class__.__name__ == 'ResNetEncoder':
+            obs_space = spaces.Dict(
+                {
+                    PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY: spaces.Box(
+                        low=np.finfo(np.float32).min,
+                        high=np.finfo(np.float32).max,
+                        shape=encoder.output_shape,
+                        dtype=np.float32,
+                    ),
+                    **obs_space.spaces,
+                }
+            )
+        else:
+            raise NotImplementedError(
+                f"Unsupported encoder type: {encoder.__class__.__name__}"
+            )
     return obs_space
