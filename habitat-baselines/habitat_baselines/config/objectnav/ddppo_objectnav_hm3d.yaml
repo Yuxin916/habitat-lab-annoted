@@ -15,21 +15,22 @@ habitat:
   dataset:
     # use the clean habitat v2 dataset
     split: "minival"
-    data_path: "/home/tsaisplus/mrs_llm/clean_habitat_v2/habitat-lab/data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz"
-    scenes_dir: "/home/tsaisplus/mrs_llm/clean_habitat_v2/habitat-lab/data/scene_datasets/"
+    # the reason why i use absolute path, i download data to another folder
+    data_path: "data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz"
+    scenes_dir: "data/scene_datasets/"
 
 habitat_baselines:
   torch_gpu_id: 0
   tensorboard_dir: "log/tb/" #
   video_dir: "log/video_dir/" #
   test_episode_count: -1
-  eval_ckpt_path_dir: "ckpt/ddppo_single_hm3d/latest.pth" #
-  num_environments: 8 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
-  checkpoint_folder: "ckpt/ddppo_single_hm3d/" #
+  eval_ckpt_path_dir: "ckpt/test/latest.pth" #
+  num_environments: 1 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
+  checkpoint_folder: "ckpt/test/" #
   trainer_name: "ddppo"  # "ddppo" or "ppo" or "ver" (faster)
   num_updates: 270000
-  log_interval: 10
-  log_file: "train_minival.log" #
+  log_interval: 5
+  log_file: "test.log" #
   num_checkpoints: 100
   # Force PyTorch to be single threaded as
   # this improves performance considerably
@@ -42,7 +43,7 @@ habitat_baselines:
   rl:
     policy:
       main_agent:
-        name: "PointNavResNetPolicy"
+        name: "SpatialBotPolicy" # PointNavResNetPolicy | SpatialBotPolicy
 
     ppo:
       # ppo params
@@ -82,6 +83,6 @@ habitat_baselines:
       reset_critic: False
 
       # Model parameters
-      backbone: se_resneXt50 #
+      backbone: BunnyPhiForCausalLM # se_resneXt50 | BunnyPhiForCausalLM
       rnn_type: LSTM
       num_recurrent_layers: 2
