@@ -49,7 +49,7 @@ from habitat_baselines.rl.ddppo.ddp_utils import (
 if TYPE_CHECKING:
     from omegaconf import DictConfig
 
-from habitat_baselines.rl.ddppo.policy import PointNavResNetNet
+from habitat_baselines.rl.ddppo.policy import PointNavResNetNet, ObjectNavSpatialNet
 from habitat_baselines.rl.ppo.agent_access_mgr import AgentAccessMgr
 from habitat_baselines.rl.ppo.evaluator import Evaluator
 from habitat_baselines.rl.ppo.single_agent_access_mgr import (  # noqa: F401.
@@ -273,10 +273,17 @@ class PPOTrainer(BaseRLTrainer):
             assert (
                 self._encoder is not None
             ), "Visual encoder is not specified for this actor"
-            with inference_mode():
-                batch[
-                    PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY
-                ] = self._encoder(batch)
+            if self._encoder.__class__.__name__ == "SpatialVLMEncoder":
+                with torch.no_grad():
+                    with inference_mode():
+                        batch[
+                            ObjectNavSpatialNet.PRETRAINED_VISUAL_FEATURES_KEY
+                        ] = self._encoder(batch)
+            elif self._encoder.__class__.__name__ == "ResNetEncoder":
+                with inference_mode():
+                    batch[
+                        PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY
+                    ] = self._encoder(batch)
 
         self._agent.rollouts.insert_first_observations(batch)
 
@@ -466,9 +473,15 @@ class PPOTrainer(BaseRLTrainer):
 
         if self._is_static_encoder:
             with inference_mode(), g_timer.avg_time("trainer.visual_features"):
-                batch[
-                    PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY
-                ] = self._encoder(batch)
+                if self._encoder.__class__.__name__ == "SpatialVLMEncoder":
+                    with torch.no_grad():
+                        batch[
+                            ObjectNavSpatialNet.PRETRAINED_VISUAL_FEATURES_KEY
+                        ] = self._encoder(batch)
+                elif self._encoder.__class__.__name__ == "ResNetEncoder":
+                    batch[
+                        PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY
+                    ] = self._encoder(batch)
 
         self._agent.rollouts.insert(
             next_observations=batch,
