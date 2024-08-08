@@ -130,10 +130,14 @@ class PPOTrainer(BaseRLTrainer):
         # 根据register初始化policy -> resnet_policy.py
         policy = baseline_registry.get_policy(self.config.RL.POLICY.name)
         observation_space = self.obs_space
+
+        # transform observation space or reize it in default config
         self.obs_transforms = get_active_obs_transforms(self.config)
         observation_space = apply_obs_transforms_obs_space(
             observation_space, self.obs_transforms
         )
+
+        # 初始化actor_critic网络
         self.actor_critic = policy.from_config(
             self.config, observation_space, self.envs.action_spaces[0]
         )
@@ -167,6 +171,7 @@ class PPOTrainer(BaseRLTrainer):
 
         if not self.config.RL.DDPPO.train_encoder:
             self._static_encoder = True
+            # the visual encoder should be frozen
             for param in self.actor_critic.net.visual_encoder.parameters():
                 param.requires_grad_(False)
 
@@ -886,17 +891,24 @@ class PPOTrainer(BaseRLTrainer):
         # Map location CPU is almost always better than mapping to a CUDA device.
         ckpt_dict = self.load_checkpoint(checkpoint_path, map_location="cpu")
 
+        # reload config saved in checkpoint
         if self.config.EVAL.USE_CKPT_CONFIG:
             config = self._setup_eval_config(ckpt_dict["config"])
+            # temporary
+            config.defrost()
+            config.VIDEO_OPTION = []
+            config.freeze()
         else:
             config = self.config.clone()
 
         ppo_cfg = config.RL.PPO
 
+        # reset the environment config to the evaluation split (train/eval)
         config.defrost()
         config.TASK_CONFIG.DATASET.SPLIT = config.EVAL.SPLIT
         config.freeze()
 
+        # add top down map and collisions to the measurements if needs video
         if len(self.config.VIDEO_OPTION) > 0:
             config.defrost()
             config.TASK_CONFIG.TASK.MEASUREMENTS.append("TOP_DOWN_MAP")
@@ -906,9 +918,13 @@ class PPOTrainer(BaseRLTrainer):
         if config.VERBOSE:
             logger.info(f"env config: {config}")
 
+        # initialize environment
         self._init_envs(config)
+
+        # initialize agent
         self._setup_actor_critic_agent(ppo_cfg)
 
+        # load each layers weights from the checkpoint
         self.agent.load_state_dict(ckpt_dict["state_dict"])
         self.actor_critic = self.agent.actor_critic
 
@@ -918,8 +934,9 @@ class PPOTrainer(BaseRLTrainer):
         )
         batch = apply_obs_transforms_batch(batch, self.obs_transforms)
 
+        #
         current_episode_reward = torch.zeros(
-            self.envs.num_envs, 1, device="cpu"
+            self.config.NUM_ENVIRONMENTS, 1, device="cpu"
         )
 
         test_recurrent_hidden_states = torch.zeros(
@@ -947,9 +964,12 @@ class PPOTrainer(BaseRLTrainer):
         rgb_frames = [
             [] for _ in range(self.config.NUM_ENVIRONMENTS)
         ]  # type: List[List[np.ndarray]]
+
+        # 生成视频文件夹
         if len(self.config.VIDEO_OPTION) > 0:
             os.makedirs(self.config.VIDEO_DIR, exist_ok=True)
 
+        # evaluate all episodes or specified number of episodes
         number_of_eval_episodes = self.config.TEST_EPISODE_COUNT
         if number_of_eval_episodes == -1:
             number_of_eval_episodes = sum(self.envs.number_of_episodes)
@@ -965,10 +985,8 @@ class PPOTrainer(BaseRLTrainer):
 
         pbar = tqdm.tqdm(total=number_of_eval_episodes)
         self.actor_critic.eval()
-        while (
-            len(stats_episodes) < number_of_eval_episodes
-            and self.envs.num_envs > 0
-        ):
+        while (len(stats_episodes) < number_of_eval_episodes
+               and self.envs.num_envs > 0):
             current_episodes = self.envs.current_episodes()
 
             with torch.no_grad():

@@ -115,13 +115,16 @@ class ObjNavRLEnv(habitat.RLEnv):
         )
 
     def get_reward(self, observations):
+        # time penalty
         reward = self._rl_config.SLACK_REWARD
 
         current_measure = self._env.get_metrics()[self._reward_measure_name]
 
+        # distance_to_goal_reward (difference between previous and current)
         reward += self._previous_measure - current_measure
         self._previous_measure = current_measure
 
+        # success reward
         if self._episode_success():
             reward += self._rl_config.SUCCESS_REWARD
 
@@ -132,9 +135,17 @@ class ObjNavRLEnv(habitat.RLEnv):
 
     def get_done(self, observations):
         done = False
-        if self._env.episode_over or self._episode_success():
+        if self._env.episode_over:
+            self.done_reason = "Episode Over"
+            done = True
+        if self._episode_success():
+            self.done_reason = "Success"
             done = True
         return done
 
     def get_info(self, observations):
-        return self.habitat_env.get_metrics()
+        info = self.habitat_env.get_metrics()
+        info['done_reason'] = self.done_reason if hasattr(self, 'done_reason') else None
+        info['episode_over'] = self._env.episode_over
+
+        return info

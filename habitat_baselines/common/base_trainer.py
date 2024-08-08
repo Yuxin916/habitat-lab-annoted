@@ -97,6 +97,11 @@ class BaseTrainer:
         with TensorboardWriter(
             self.config.TENSORBOARD_DIR, flush_secs=self.flush_secs
         ) as writer:
+            # temporary fix for eval-only runs
+            self.config.defrost()
+            self.config.EVAL_CKPT_PATH_DIR = "data/ddppo_checkpoints_minival/ckpt.26.pth"
+            self.config.VIDEO_OPTION = ["tensorboard"]
+            self.config.freeze()
             if os.path.isfile(self.config.EVAL_CKPT_PATH_DIR):
                 # evaluate singe checkpoint
                 proposed_index = get_checkpoint_id(

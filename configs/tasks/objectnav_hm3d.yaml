@@ -45,7 +45,7 @@ TASK:
 
 DATASET:
   TYPE: ObjectNav-v1
-  SPLIT: val
+  SPLIT: minival
   DATA_PATH: "data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz"
   SCENES_DIR: "data/scene_datasets/"
   SCENE_DATASET: "data/scene_datasets/hm3d_v0.2/hm3d_annotated_basis.scene_dataset_config.json"

@@ -7,16 +7,16 @@ SENSORS: ["DEPTH_SENSOR", "RGB_SENSOR"]
 #######################Training#############################################################################
 TRAINER_NAME: "ddppo"  # "ddppo" or "ppo"
 # only define one of the following
-#TOTAL_NUM_STEPS: 7e6
-NUM_UPDATES: 270000
+TOTAL_NUM_STEPS: 7e6
+#NUM_UPDATES: 270000
 
 #######################Saving & Log#############################################################################
 # tensorboard, video and checkpoint directories
-TENSORBOARD_DIR: "tb_minival"
-VIDEO_DIR: "video_dir_minival"
+TENSORBOARD_DIR: "tb_test"
+VIDEO_DIR: "video_test"
 CHECKPOINT_FOLDER: "data/ddppo_checkpoints_minival/"
-LOG_INTERVAL: 25
-LOG_FILE: "train_minival.log"
+LOG_INTERVAL: 10
+LOG_FILE: "env_test_minival.log"
 NUM_CHECKPOINTS: 100
 
 

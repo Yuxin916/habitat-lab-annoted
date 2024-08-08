@@ -69,6 +69,9 @@ class PointNavResNetPolicy(Policy):
     def from_config(
         cls, config: Config, observation_space: spaces.Dict, action_space
     ):
+        # initialize this class with the parameters from the config
+        # same as initializing the class with the parameters from the constructor
+
         return cls(
             observation_space=observation_space,
             action_space=action_space,
