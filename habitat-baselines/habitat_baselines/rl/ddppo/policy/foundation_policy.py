@@ -307,11 +307,11 @@ class ObjectNavSpatialNet(Net):
                 self.visual_fc = nn.Sequential(
                     nn.Flatten(),
                     nn.Linear(
-                        self.visual_encoder.output_shape[-1], hidden_size
+                        self.visual_encoder.output_shape[-1], hidden_size//2
                     ),
                     nn.ReLU(True),
                     nn.Linear(
-                        hidden_size, hidden_size
+                        hidden_size//2, hidden_size
                     ),
                     nn.ReLU(True),
                 )
@@ -367,14 +367,6 @@ class ObjectNavSpatialNet(Net):
                 ]
             else:
                 visual_feats = self.visual_encoder(observations)
-
-            # TODO:
-            # # Max pooling along the token dimension (dim=1)
-            # visual_feats = F.max_pool1d(visual_feats.transpose(1, 2),
-            #                             kernel_size=15).transpose(1, 2)
-
-            # or assume the last token contains all information
-            visual_feats = visual_feats[:, -1, :]
 
             visual_feats = self.visual_fc(visual_feats)
             aux_loss_state["perception_embed"] = visual_feats
@@ -489,7 +481,13 @@ class ObjectNavSpatialNet(Net):
 
         x.append(prev_actions)
 
-        out = torch.cat(x, dim=1)
+        try:
+            out = torch.cat(x, dim=1)
+        except Exception as e:
+            print(f"Error: {e}")
+            # Handle the error by inspecting tensor shapes
+            for i, tensor in enumerate(x):
+                print(f"Tensor {i} shape: {tensor.shape}")
         out, rnn_hidden_states = self.state_encoder(
             out, rnn_hidden_states, masks, rnn_build_seq_info
         )
@@ -595,6 +593,7 @@ class SpatialVLMEncoder(nn.Module):
         return pil_image
 
     def forward(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:  # type: ignore
+
         if self.is_blind:
             return None
 
@@ -627,42 +626,57 @@ class SpatialVLMEncoder(nn.Module):
         # batch(n_env) x channel x height x width
         rgb_image = cnn_input[1]
         depth_image = cnn_input[0]
+        n_env = rgb_image.size(0)
 
+        self.backbone.get_vision_tower().to('cuda')
         # Pre-process the images
         rgb_pil_images = self.pre_process_image(rgb_image)
         depth_pil_images = self.pre_process_image(depth_image)
 
+        # (rgb_batch(n_env) + rgb_batch(n_env)) x channel x height x width
         image_tensor = self.backbone.process_images(rgb_pil_images + depth_pil_images,
                                                self.backbone.config).to(dtype=self.backbone.dtype, device='cuda')
+        self.backbone.get_vision_tower().to('cuda')
+
+        # batch(n_env) x channel x height x width
+        rgb_image_tensor = image_tensor[:n_env, :, :, :]
+        depth_image_tensor = image_tensor[n_env:, :, :, :]
 
         # if True:
         #     self.debug_image_tensor(image_tensor)
 
-        self.backbone.get_vision_tower().to('cuda')
-        output_ids = self.backbone(
-            input_ids,
-            images=image_tensor,  # 2 x 3 x 384 x 384
-            # max_new_tokens=250,
-            use_cache=False,
-            # repetition_penalty=1.0 # increase this to avoid chattering
-        )[0]
+        output = torch.zeros(n_env, 1, self.output_shape[-1], device='cuda')
 
-        # x = self.delete_lm_head(output_ids)
+        for i in range(n_env):
+            # concatenate the rgb and depth images
+            image_tensor = torch.cat([rgb_image_tensor[i].unsqueeze(0),
+                                      depth_image_tensor[i].unsqueeze(0)], dim=0)
 
-        # # Max pooling along the token dimension (dim=1)
-        x = F.adaptive_max_pool1d(output_ids.transpose(1, 2),
-                                    output_size=1).transpose(1, 2)
+            output_ids = self.backbone(
+                input_ids,
+                images=image_tensor,  # 2 x 3 x 384 x 384
+                # max_new_tokens=250,
+                use_cache=False,
+                # repetition_penalty=1.0 # increase this to avoid chattering
+            )[0]
 
-        # Linar linear along the embedding dimension (dim=2)
+            # x = self.delete_lm_head(output_ids)
 
-        # or
-        # x = output_ids[:, -1, :].unsqueeze(0)
+            # # Max pooling along the token dimension (dim=1)
+            # x = F.adaptive_max_pool1d(output_ids.transpose(1, 2),
+            #                             output_size=1).transpose(1, 2)
 
-        return x
+            # Linar linear along the embedding dimension (dim=2)
+
+            # or
+            x = output_ids[:, -1, :].unsqueeze(0)
+            output[i] = x
+
+        return output
 
     def debug_image_tensor(self, image_tensor):
         import matplotlib.pyplot as plt
-        fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+        fig, axes = plt.subplots(3, 2, figsize=(10, 10))
         # Iterate over 4 images
         for i in range(4):
             test_image = image_tensor.to('cpu').to(torch.float32)
