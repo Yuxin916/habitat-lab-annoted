@@ -28,6 +28,7 @@ from habitat_baselines.common.tensor_dict import (
 )
 from habitat_baselines.common.windowed_running_mean import WindowedRunningMean
 from habitat_baselines.rl.ddppo.policy.resnet_policy import PointNavResNetNet
+from habitat_baselines.rl.ddppo.policy.foundation_policy import ObjectNavSpatialNet
 from habitat_baselines.rl.ppo.policy import NetPolicy
 from habitat_baselines.rl.ver.task_enums import (
     EnvironmentWorkerTasks,
@@ -314,9 +315,15 @@ class InferenceWorkerProcess(ProcessBase):
             ]
             prev_actions = self.rollouts.next_prev_actions[environment_ids]
             if self._static_encoder:
-                obs[
-                    PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY
-                ] = self.visual_encoder(obs)
+                if isinstance(self.actor_critic.net, ObjectNavSpatialNet):
+                    with torch.no_grad():
+                        obs[
+                            ObjectNavSpatialNet.PRETRAINED_VISUAL_FEATURES_KEY
+                        ] = self.visual_encoder(obs)
+                elif isinstance(self.actor_critic.net, PointNavResNetNet):
+                    obs[
+                        PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY
+                    ] = self.visual_encoder(obs)
 
             action_data = self.actor_critic.act(
                 obs,
