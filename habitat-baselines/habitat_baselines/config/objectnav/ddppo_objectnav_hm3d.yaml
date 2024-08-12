@@ -21,16 +21,16 @@ habitat:
 
 habitat_baselines:
   torch_gpu_id: 0
-  tensorboard_dir: "log/tb/" #
-  video_dir: "log/video_dir/" #
+  tensorboard_dir: "log/tb/pure_vlm_adapter" #
+  video_dir: "log/video_dir/pure_vlm_adapter" #
   test_episode_count: -1
-  eval_ckpt_path_dir: "ckpt/test/latest.pth" #
-  num_environments: 1 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
-  checkpoint_folder: "ckpt/test/" #
+  eval_ckpt_path_dir: "ckpt/pure_vlm_adapter/latest.pth" #
+  num_environments: 4 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
+  checkpoint_folder: "ckpt/pure_vlm_adapter/" #
   trainer_name: "ddppo"  # "ddppo" or "ppo" or "ver" (faster)
   num_updates: 270000
   log_interval: 5
-  log_file: "test.log" #
+  log_file: "pure_vlm_adapter.log" #
   num_checkpoints: 100
   # Force PyTorch to be single threaded as
   # this improves performance considerably
