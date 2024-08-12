@@ -31,7 +31,8 @@ from habitat_baselines.rl.ddppo.ddp_utils import (
     requeue_job,
     save_resume_state,
 )
-# from habitat_baselines.rl.ddppo.policy import PointNavResNetNet  # noqa: F401.
+from habitat_baselines.rl.ddppo.policy import PointNavResNetNet  # noqa: F401.
+from habitat_baselines.rl.ddppo.policy import ObjectNavSpatialNet  # noqa: F401.
 from habitat_baselines.rl.ppo.ppo_trainer import PPOTrainer
 from habitat_baselines.rl.ppo.single_agent_access_mgr import (
     get_rollout_obs_space,

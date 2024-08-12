@@ -1,19 +1,29 @@
+#!/usr/bin/env python3
+import time
+# Copyright (c) Meta Platforms, Inc. and its affiliates.
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+
+
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 import os
-
+import logging
+import numpy as np
+import torch
 from gym import spaces
 from torch import nn as nn
 from torch.nn import functional as F
 from torchvision import transforms as T
 from torchvision.transforms import functional as TF
+
+# VLM requirement
 from torchvision.transforms import ToPILImage
-import torch
 import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from PIL import Image
 import warnings
-import numpy as np
+
 from habitat.tasks.nav.instance_image_nav_task import InstanceImageGoalSensor
 from habitat.tasks.nav.nav import (
     EpisodicCompassSensor,
@@ -100,8 +110,8 @@ class SpatialBotPolicy(NetPolicy):
                 num_recurrent_layers=num_recurrent_layers,
                 rnn_type=rnn_type,
                 backbone=backbone,
-                force_blind_policy=force_blind_policy,
                 fuse_keys=fuse_keys,
+                force_blind_policy=force_blind_policy,
                 discrete_actions=discrete_actions,
             ),
             action_space=action_space,
@@ -297,6 +307,7 @@ class ObjectNavSpatialNet(Net):
                     if len(observation_space.spaces[k].shape) == 3
                 }
             )
+
         if backbone.startswith("BunnyPhiForCausalLM"):
             with torch.no_grad():
                 self.visual_encoder = SpatialVLMEncoder(
@@ -304,16 +315,16 @@ class ObjectNavSpatialNet(Net):
                 )
 
             if not self.visual_encoder.is_blind:
-                self.visual_fc = nn.Sequential(
+                self.adapter = nn.Sequential(
                     nn.Flatten(),
                     nn.Linear(
-                        self.visual_encoder.output_shape[-1], hidden_size//2
+                        self.visual_encoder.output_shape[-1], hidden_size*2
                     ),
-                    nn.ReLU(True),
+                    # nn.LeakyReLU(True),
                     nn.Linear(
-                        hidden_size//2, hidden_size
+                        hidden_size*2, hidden_size
                     ),
-                    nn.ReLU(True),
+                    # nn.ReLU(True),
                 )
 
         self.state_encoder = build_rnn_state_encoder(
@@ -362,13 +373,14 @@ class ObjectNavSpatialNet(Net):
                 ObjectNavSpatialNet.PRETRAINED_VISUAL_FEATURES_KEY
                 in observations
             ):
+                # batch(n_env) x 1 x token_embedding
                 visual_feats = observations[
                     ObjectNavSpatialNet.PRETRAINED_VISUAL_FEATURES_KEY
                 ]
             else:
                 visual_feats = self.visual_encoder(observations)
 
-            visual_feats = self.visual_fc(visual_feats)
+            visual_feats = self.adapter(visual_feats)
             aux_loss_state["perception_embed"] = visual_feats
             x.append(visual_feats)
 
@@ -532,7 +544,7 @@ class SpatialVLMEncoder(nn.Module):
                 trust_remote_code=True).to(torch.float16).eval()
             self.delete_lm_head = self.backbone.lm_head
             self.backbone.lm_head = nn.Sequential()
-            self.backbone.get_vision_tower().to('cuda')
+            # self.backbone.get_vision_tower().to('cuda')
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
@@ -597,16 +609,16 @@ class SpatialVLMEncoder(nn.Module):
         if self.is_blind:
             return None
 
-        cnn_input = []
-        for k in self.visual_keys:
-            obs_k = observations[k]
-            # permute tensor to dimension [BATCH x CHANNEL x HEIGHT X WIDTH]
-            obs_k = obs_k.permute(0, 3, 1, 2)
-            if self.key_needs_rescaling[k] is not None:
-                obs_k = (
-                    obs_k.float() * self.key_needs_rescaling[k]
-                )  # normalize
-            cnn_input.append(obs_k)
+        # cnn_input = []
+        # for k in self.visual_keys:
+        #     obs_k = observations[k]
+        #     # permute tensor to dimension [BATCH x CHANNEL x HEIGHT X WIDTH]
+        #     obs_k = obs_k.permute(0, 3, 1, 2)
+        #     if self.key_needs_rescaling[k] is not None:
+        #         obs_k = (
+        #             obs_k.float() * self.key_needs_rescaling[k]
+        #         )  # normalize
+        #     cnn_input.append(obs_k)
 
         # text prompt
         prompt = (
@@ -624,11 +636,12 @@ class SpatialVLMEncoder(nn.Module):
         input_ids = torch.tensor(text_chunks[0] + [-201] + [-202] + text_chunks[1][self.offset_bos:], dtype=torch.long).unsqueeze(0).to('cuda')
 
         # batch(n_env) x channel x height x width
-        rgb_image = cnn_input[1]
-        depth_image = cnn_input[0]
+        rgb_image = observations['rgb'].permute(0, 3, 1, 2)
+        depth_image = observations['depth'].permute(0, 3, 1, 2)
         n_env = rgb_image.size(0)
 
-        self.backbone.get_vision_tower().to('cuda')
+        # self.backbone.get_vision_tower().to('cuda')
+        # self.backbone.eval()
         # Pre-process the images
         rgb_pil_images = self.pre_process_image(rgb_image)
         depth_pil_images = self.pre_process_image(depth_image)
@@ -637,6 +650,7 @@ class SpatialVLMEncoder(nn.Module):
         image_tensor = self.backbone.process_images(rgb_pil_images + depth_pil_images,
                                                self.backbone.config).to(dtype=self.backbone.dtype, device='cuda')
         self.backbone.get_vision_tower().to('cuda')
+        # self.backbone.eval()
 
         # batch(n_env) x channel x height x width
         rgb_image_tensor = image_tensor[:n_env, :, :, :]
@@ -647,30 +661,33 @@ class SpatialVLMEncoder(nn.Module):
 
         output = torch.zeros(n_env, 1, self.output_shape[-1], device='cuda')
 
-        for i in range(n_env):
-            # concatenate the rgb and depth images
-            image_tensor = torch.cat([rgb_image_tensor[i].unsqueeze(0),
-                                      depth_image_tensor[i].unsqueeze(0)], dim=0)
+        with torch.no_grad():
+            start = time.time()
+            for i in range(n_env):
+                # concatenate the rgb and depth images
+                image_tensor = torch.cat([rgb_image_tensor[i].unsqueeze(0),
+                                          depth_image_tensor[i].unsqueeze(0)], dim=0)
+                output_ids = self.backbone(
+                    input_ids,
+                    images=image_tensor,  # 2 x 3 x 384 x 384
+                    # max_new_tokens=250,
+                    use_cache=False,
+                    # repetition_penalty=1.0 # increase this to avoid chattering
+                )[0]
 
-            output_ids = self.backbone(
-                input_ids,
-                images=image_tensor,  # 2 x 3 x 384 x 384
-                # max_new_tokens=250,
-                use_cache=False,
-                # repetition_penalty=1.0 # increase this to avoid chattering
-            )[0]
+                # x = self.delete_lm_head(output_ids)
 
-            # x = self.delete_lm_head(output_ids)
+                # # Max pooling along the token dimension (dim=1)
+                # x = F.adaptive_max_pool1d(output_ids.transpose(1, 2),
+                #                             output_size=1).transpose(1, 2)
 
-            # # Max pooling along the token dimension (dim=1)
-            # x = F.adaptive_max_pool1d(output_ids.transpose(1, 2),
-            #                             output_size=1).transpose(1, 2)
+                # Linar linear along the embedding dimension (dim=2)
 
-            # Linar linear along the embedding dimension (dim=2)
+                # or
+                x = output_ids[:, -1, :].unsqueeze(0)
+                output[i] = x
 
-            # or
-            x = output_ids[:, -1, :].unsqueeze(0)
-            output[i] = x
+            logging.info(f"Time taken for VLM forward pass: {time.time() - start:.2f}s for {n_env} environments")
 
         return output
 
@@ -686,12 +703,3 @@ class SpatialVLMEncoder(nn.Module):
         plt.tight_layout()
 
         plt.show()
-
-
-
-# with torch.no_grad():
-
-#
-# print(tokenizer.decode(output_ids[input_ids.shape[1]:], skip_special_tokens=True).strip())
-#
-# pass
