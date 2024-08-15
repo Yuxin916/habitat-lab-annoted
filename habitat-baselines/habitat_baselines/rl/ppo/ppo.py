@@ -264,6 +264,7 @@ class PPO(nn.Module, Updater):
             record_min_mean_max(ratio, "prob_ratio")
 
             learner_metrics["value_loss"].append(value_loss)
+            learner_metrics["lr"].append(self.get_lr())
             learner_metrics["action_loss"].append(action_loss)
             learner_metrics["dist_entropy"].append(dist_entropy)
             if epoch == (self.ppo_epoch - 1):
@@ -297,6 +298,10 @@ class PPO(nn.Module, Updater):
                     ).float(),
                     "policy_version_difference",
                 )
+
+    def get_lr(self):
+        for param_group in self.optimizer.param_groups:
+            return param_group['lr']
 
     def update(
         self,
