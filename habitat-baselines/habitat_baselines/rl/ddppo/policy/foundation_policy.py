@@ -45,6 +45,7 @@ from habitat_baselines.rl.models.rnn_state_encoder import (
 )
 from habitat_baselines.rl.ppo import Net, NetPolicy
 from habitat_baselines.utils.common import get_num_actions
+from habitat.utils.constant import category_to_id, parse_tensor_value
 
 """
 Download Dataset:
@@ -190,19 +191,21 @@ class ObjectNavSpatialNet(Net):
     ):
         super().__init__()
         self.prev_action_embedding: nn.Module
+        rnn_input_size = 0
+
         self.discrete_actions = discrete_actions
-        self._n_prev_action = 32
-        if discrete_actions:
-            self.prev_action_embedding = nn.Embedding(
-                action_space.n + 1, self._n_prev_action
-            )
-        else:
-            num_actions = get_num_actions(action_space)
-            self.prev_action_embedding = nn.Linear(
-                num_actions, self._n_prev_action
-            )
-        self._n_prev_action = 32
-        rnn_input_size = self._n_prev_action  # test
+        # self._n_prev_action = 32
+        # if discrete_actions:
+        #     self.prev_action_embedding = nn.Embedding(
+        #         action_space.n + 1, self._n_prev_action
+        #     )
+        # else:
+        #     num_actions = get_num_actions(action_space)
+        #     self.prev_action_embedding = nn.Linear(
+        #         num_actions, self._n_prev_action
+        #     )
+        # # self._n_prev_action = 32
+        # rnn_input_size += self._n_prev_action  # test
 
         # Only fuse the 1D state inputs. Other inputs are processed by the
         # visual encoder
@@ -230,70 +233,70 @@ class ObjectNavSpatialNet(Net):
                 for k in self._fuse_keys_1d
             )
 
-        if (
-            IntegratedPointGoalGPSAndCompassSensor.cls_uuid
-            in observation_space.spaces
-        ):
-            n_input_goal = (
-                observation_space.spaces[
-                    IntegratedPointGoalGPSAndCompassSensor.cls_uuid
-                ].shape[0]
-                + 1
-            )
-            self.tgt_embeding = nn.Linear(n_input_goal, 32)
-            rnn_input_size += 32
+        # if (
+        #     IntegratedPointGoalGPSAndCompassSensor.cls_uuid
+        #     in observation_space.spaces
+        # ):
+        #     n_input_goal = (
+        #         observation_space.spaces[
+        #             IntegratedPointGoalGPSAndCompassSensor.cls_uuid
+        #         ].shape[0]
+        #         + 1
+        #     )
+        #     self.tgt_embeding = nn.Linear(n_input_goal, 32)
+        #     rnn_input_size += 32
 
-        if ObjectGoalSensor.cls_uuid in observation_space.spaces:
-            self._n_object_categories = (
-                int(
-                    observation_space.spaces[ObjectGoalSensor.cls_uuid].high[0]
-                )
-                + 1
-            )
-            self.obj_categories_embedding = nn.Embedding(
-                self._n_object_categories, 32
-            )
-            rnn_input_size += 32
+        # if ObjectGoalSensor.cls_uuid in observation_space.spaces:
+        #     self._n_object_categories = (
+        #         int(
+        #             observation_space.spaces[ObjectGoalSensor.cls_uuid].high[0]
+        #         )
+        #         + 1
+        #     )
+        #     self.obj_categories_embedding = nn.Embedding(
+        #         self._n_object_categories, 32
+        #     )
+        #     rnn_input_size += 32
 
-        if EpisodicGPSSensor.cls_uuid in observation_space.spaces:
-            input_gps_dim = observation_space.spaces[
-                EpisodicGPSSensor.cls_uuid
-            ].shape[0]
-            self.gps_embedding = nn.Linear(input_gps_dim, 32)
-            rnn_input_size += 32
-
-        if PointGoalSensor.cls_uuid in observation_space.spaces:
-            input_pointgoal_dim = observation_space.spaces[
-                PointGoalSensor.cls_uuid
-            ].shape[0]
-            self.pointgoal_embedding = nn.Linear(input_pointgoal_dim, 32)
-            rnn_input_size += 32
-
-        if HeadingSensor.cls_uuid in observation_space.spaces:
-            input_heading_dim = (
-                observation_space.spaces[HeadingSensor.cls_uuid].shape[0] + 1
-            )
-            assert input_heading_dim == 2, "Expected heading with 2D rotation."
-            self.heading_embedding = nn.Linear(input_heading_dim, 32)
-            rnn_input_size += 32
-
-        if ProximitySensor.cls_uuid in observation_space.spaces:
-            input_proximity_dim = observation_space.spaces[
-                ProximitySensor.cls_uuid
-            ].shape[0]
-            self.proximity_embedding = nn.Linear(input_proximity_dim, 32)
-            rnn_input_size += 32
-
-        if EpisodicCompassSensor.cls_uuid in observation_space.spaces:
-            assert (
-                observation_space.spaces[EpisodicCompassSensor.cls_uuid].shape[
-                    0
-                ]
-                == 1
-            ), "Expected compass with 2D rotation."
-            input_compass_dim = 2  # cos and sin of the angle
-            self.compass_embedding = nn.Linear(input_compass_dim, 32)
-            rnn_input_size += 32
+        # if EpisodicGPSSensor.cls_uuid in observation_space.spaces:
+        #     input_gps_dim = observation_space.spaces[
+        #         EpisodicGPSSensor.cls_uuid
+        #     ].shape[0]
+        #     self.gps_embedding = nn.Linear(input_gps_dim, 32)
+        #     rnn_input_size += 32
+        #
+        # if PointGoalSensor.cls_uuid in observation_space.spaces:
+        #     input_pointgoal_dim = observation_space.spaces[
+        #         PointGoalSensor.cls_uuid
+        #     ].shape[0]
+        #     self.pointgoal_embedding = nn.Linear(input_pointgoal_dim, 32)
+        #     rnn_input_size += 32
+        #
+        # if HeadingSensor.cls_uuid in observation_space.spaces:
+        #     input_heading_dim = (
+        #         observation_space.spaces[HeadingSensor.cls_uuid].shape[0] + 1
+        #     )
+        #     assert input_heading_dim == 2, "Expected heading with 2D rotation."
+        #     self.heading_embedding = nn.Linear(input_heading_dim, 32)
+        #     rnn_input_size += 32
+        #
+        # if ProximitySensor.cls_uuid in observation_space.spaces:
+        #     input_proximity_dim = observation_space.spaces[
+        #         ProximitySensor.cls_uuid
+        #     ].shape[0]
+        #     self.proximity_embedding = nn.Linear(input_proximity_dim, 32)
+        #     rnn_input_size += 32
+        #
+        # if EpisodicCompassSensor.cls_uuid in observation_space.spaces:
+        #     assert (
+        #         observation_space.spaces[EpisodicCompassSensor.cls_uuid].shape[
+        #             0
+        #         ]
+        #         == 1
+        #     ), "Expected compass with 2D rotation."
+        #     input_compass_dim = 2  # cos and sin of the angle
+        #     self.compass_embedding = nn.Linear(input_compass_dim, 32)
+        #     rnn_input_size += 32
 
         self._hidden_size = hidden_size
 
@@ -318,13 +321,13 @@ class ObjectNavSpatialNet(Net):
                 self.adapter = nn.Sequential(
                     nn.Flatten(),
                     nn.Linear(
-                        self.visual_encoder.output_shape[-1], hidden_size*2
+                        1458, hidden_size
                     ),
                     # nn.LeakyReLU(True),
                     nn.Linear(
-                        hidden_size*2, hidden_size
+                        hidden_size, hidden_size
                     ),
-                    # nn.ReLU(True),
+                    nn.LeakyReLU(True),
                 )
 
         self.state_encoder = build_rnn_state_encoder(
@@ -384,114 +387,114 @@ class ObjectNavSpatialNet(Net):
             aux_loss_state["perception_embed"] = visual_feats
             x.append(visual_feats)
 
-        if len(self._fuse_keys_1d) != 0:
-            fuse_states = torch.cat(
-                [observations[k] for k in self._fuse_keys_1d], dim=-1
-            )
-            x.append(fuse_states.float())
-
-        if IntegratedPointGoalGPSAndCompassSensor.cls_uuid in observations:
-            goal_observations = observations[
-                IntegratedPointGoalGPSAndCompassSensor.cls_uuid
-            ]
-            if goal_observations.shape[1] == 2:
-                # Polar Dimensionality 2
-                # 2D polar transform
-                goal_observations = torch.stack(
-                    [
-                        goal_observations[:, 0],
-                        torch.cos(-goal_observations[:, 1]),
-                        torch.sin(-goal_observations[:, 1]),
-                    ],
-                    -1,
-                )
-            else:
-                assert (
-                    goal_observations.shape[1] == 3
-                ), "Unsupported dimensionality"
-                vertical_angle_sin = torch.sin(goal_observations[:, 2])
-                # Polar Dimensionality 3
-                # 3D Polar transformation
-                goal_observations = torch.stack(
-                    [
-                        goal_observations[:, 0],
-                        torch.cos(-goal_observations[:, 1])
-                        * vertical_angle_sin,
-                        torch.sin(-goal_observations[:, 1])
-                        * vertical_angle_sin,
-                        torch.cos(goal_observations[:, 2]),
-                    ],
-                    -1,
-                )
-
-            x.append(self.tgt_embeding(goal_observations))
-
-        if PointGoalSensor.cls_uuid in observations:
-            goal_observations = observations[PointGoalSensor.cls_uuid]
-            x.append(self.pointgoal_embedding(goal_observations))
-
-        if ProximitySensor.cls_uuid in observations:
-            sensor_observations = observations[ProximitySensor.cls_uuid]
-            x.append(self.proximity_embedding(sensor_observations))
-
-        if HeadingSensor.cls_uuid in observations:
-            sensor_observations = observations[HeadingSensor.cls_uuid]
-            sensor_observations = torch.stack(
-                [
-                    torch.cos(sensor_observations[0]),
-                    torch.sin(sensor_observations[0]),
-                ],
-                -1,
-            )
-            x.append(self.heading_embedding(sensor_observations))
-
-        if ObjectGoalSensor.cls_uuid in observations:
-            object_goal = observations[ObjectGoalSensor.cls_uuid].long()
-            x.append(self.obj_categories_embedding(object_goal).squeeze(dim=1))
-
-        if EpisodicCompassSensor.cls_uuid in observations:
-            compass_observations = torch.stack(
-                [
-                    torch.cos(observations[EpisodicCompassSensor.cls_uuid]),
-                    torch.sin(observations[EpisodicCompassSensor.cls_uuid]),
-                ],
-                -1,
-            )
-            x.append(
-                self.compass_embedding(compass_observations.squeeze(dim=1))
-            )
-
-        if EpisodicGPSSensor.cls_uuid in observations:
-            x.append(
-                self.gps_embedding(observations[EpisodicGPSSensor.cls_uuid])
-            )
-
-        for uuid in [
-            ImageGoalSensor.cls_uuid,
-            InstanceImageGoalSensor.cls_uuid,
-        ]:
-            if uuid in observations:
-                goal_image = observations[uuid]
-
-                goal_visual_encoder = getattr(self, f"{uuid}_encoder")
-                goal_visual_output = goal_visual_encoder({"rgb": goal_image})
-
-                goal_visual_fc = getattr(self, f"{uuid}_fc")
-                x.append(goal_visual_fc(goal_visual_output))
-
-        if self.discrete_actions:
-            prev_actions = prev_actions.squeeze(-1)
-            start_token = torch.zeros_like(prev_actions)
-            # The mask means the previous action will be zero, an extra dummy action
-            prev_actions = self.prev_action_embedding(
-                torch.where(masks.view(-1), prev_actions + 1, start_token)
-            )
-        else:
-            prev_actions = self.prev_action_embedding(
-                masks * prev_actions.float()
-            )
-
-        x.append(prev_actions)
+        # if len(self._fuse_keys_1d) != 0:
+        #     fuse_states = torch.cat(
+        #         [observations[k] for k in self._fuse_keys_1d], dim=-1
+        #     )
+        #     x.append(fuse_states.float())
+        #
+        # if IntegratedPointGoalGPSAndCompassSensor.cls_uuid in observations:
+        #     goal_observations = observations[
+        #         IntegratedPointGoalGPSAndCompassSensor.cls_uuid
+        #     ]
+        #     if goal_observations.shape[1] == 2:
+        #         # Polar Dimensionality 2
+        #         # 2D polar transform
+        #         goal_observations = torch.stack(
+        #             [
+        #                 goal_observations[:, 0],
+        #                 torch.cos(-goal_observations[:, 1]),
+        #                 torch.sin(-goal_observations[:, 1]),
+        #             ],
+        #             -1,
+        #         )
+        #     else:
+        #         assert (
+        #             goal_observations.shape[1] == 3
+        #         ), "Unsupported dimensionality"
+        #         vertical_angle_sin = torch.sin(goal_observations[:, 2])
+        #         # Polar Dimensionality 3
+        #         # 3D Polar transformation
+        #         goal_observations = torch.stack(
+        #             [
+        #                 goal_observations[:, 0],
+        #                 torch.cos(-goal_observations[:, 1])
+        #                 * vertical_angle_sin,
+        #                 torch.sin(-goal_observations[:, 1])
+        #                 * vertical_angle_sin,
+        #                 torch.cos(goal_observations[:, 2]),
+        #             ],
+        #             -1,
+        #         )
+        #
+        #     x.append(self.tgt_embeding(goal_observations))
+        #
+        # if PointGoalSensor.cls_uuid in observations:
+        #     goal_observations = observations[PointGoalSensor.cls_uuid]
+        #     x.append(self.pointgoal_embedding(goal_observations))
+        #
+        # if ProximitySensor.cls_uuid in observations:
+        #     sensor_observations = observations[ProximitySensor.cls_uuid]
+        #     x.append(self.proximity_embedding(sensor_observations))
+        #
+        # if HeadingSensor.cls_uuid in observations:
+        #     sensor_observations = observations[HeadingSensor.cls_uuid]
+        #     sensor_observations = torch.stack(
+        #         [
+        #             torch.cos(sensor_observations[0]),
+        #             torch.sin(sensor_observations[0]),
+        #         ],
+        #         -1,
+        #     )
+        #     x.append(self.heading_embedding(sensor_observations))
+        #
+        # if ObjectGoalSensor.cls_uuid in observations:
+        #     object_goal = observations[ObjectGoalSensor.cls_uuid].long()
+        #     x.append(self.obj_categories_embedding(object_goal).squeeze(dim=1))
+        #
+        # if EpisodicCompassSensor.cls_uuid in observations:
+        #     compass_observations = torch.stack(
+        #         [
+        #             torch.cos(observations[EpisodicCompassSensor.cls_uuid]),
+        #             torch.sin(observations[EpisodicCompassSensor.cls_uuid]),
+        #         ],
+        #         -1,
+        #     )
+        #     x.append(
+        #         self.compass_embedding(compass_observations.squeeze(dim=1))
+        #     )
+        #
+        # if EpisodicGPSSensor.cls_uuid in observations:
+        #     x.append(
+        #         self.gps_embedding(observations[EpisodicGPSSensor.cls_uuid])
+        #     )
+        #
+        # for uuid in [
+        #     ImageGoalSensor.cls_uuid,
+        #     InstanceImageGoalSensor.cls_uuid,
+        # ]:
+        #     if uuid in observations:
+        #         goal_image = observations[uuid]
+        #
+        #         goal_visual_encoder = getattr(self, f"{uuid}_encoder")
+        #         goal_visual_output = goal_visual_encoder({"rgb": goal_image})
+        #
+        #         goal_visual_fc = getattr(self, f"{uuid}_fc")
+        #         x.append(goal_visual_fc(goal_visual_output))
+        #
+        # if self.discrete_actions:
+        #     prev_actions = prev_actions.squeeze(-1)
+        #     start_token = torch.zeros_like(prev_actions)
+        #     # The mask means the previous action will be zero, an extra dummy action
+        #     prev_actions = self.prev_action_embedding(
+        #         torch.where(masks.view(-1), prev_actions + 1, start_token)
+        #     )
+        # else:
+        #     prev_actions = self.prev_action_embedding(
+        #         masks * prev_actions.float()
+        #     )
+        #
+        # x.append(prev_actions)
 
         try:
             out = torch.cat(x, dim=1)
@@ -544,7 +547,8 @@ class SpatialVLMEncoder(nn.Module):
                 trust_remote_code=True).to(torch.float16).eval()
             self.delete_lm_head = self.backbone.lm_head
             self.backbone.lm_head = nn.Sequential()
-            # self.backbone.get_vision_tower().to('cuda')
+            self.backbone.get_vision_tower().to('cuda')
+            self.backbone.model.vision_tower = self.backbone.model.vision_tower.to('cuda')
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
@@ -552,10 +556,14 @@ class SpatialVLMEncoder(nn.Module):
 
             self.output_shape = (
                 1, # number of tokens  # TODO
-                self.backbone.config.hidden_size  # token embedding dimension
+                729*2  # token embedding dimension
             )
 
             for param in self.backbone.parameters():
+                param.requires_grad = False
+            for param in self.backbone.model.parameters():
+                param.requires_grad = False
+            for param in self.backbone.model.vision_tower.parameters():
                 param.requires_grad = False
             for module in self.backbone.modules():
                 if "BatchNorm" in type(module).__name__:
@@ -604,6 +612,35 @@ class SpatialVLMEncoder(nn.Module):
 
         return pil_image
 
+    def form_prompt(self, observations):
+        goal_name = observations['objectgoal']
+        str_gps = parse_tensor_value(observations['gps'])
+        str_compass = parse_tensor_value(observations['compass'])
+        robot_position = f"GPS: {str_gps}  Compass: {str_compass}"
+
+        prompt_template = """
+        Objective:
+        Control a robot equipped with RGB-D sensors to locate a specific target object
+
+        Representation Details:
+        - RGB-D images are provided as input
+        - Robot Position: GPS and Compass relative to the starting position
+
+        Strategy:
+        Take note all detected objects and their spatial relationships,
+        including proximity and layout, based on depth information.
+        Commonsense reasoning about the target object and detected objects.
+
+        [input:]
+        Task: Locate the {GOAL_NAME}
+
+        Position:
+        {ROBOT_POSITION}
+        """
+        prompt = prompt_template.format(GOAL_NAME=category_to_id[goal_name[0]],
+                                        ROBOT_POSITION=robot_position)
+        return prompt
+
     def forward(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:  # type: ignore
 
         if self.is_blind:
@@ -621,19 +658,23 @@ class SpatialVLMEncoder(nn.Module):
         #     cnn_input.append(obs_k)
 
         # text prompt
-        prompt = (
-            "Ignore walls, floors, ceilings, and windows. "
-            "List all detected objects and describe their spatial relationships, "
-            "including proximity and layout, based on depth information. "
-            "Focus on the 2D layout of the objects, considering their relative positions and distances to "
-            "support navigation tasks. Extract features that reflect these 3D spatial relationships."
-        )
-
-        text = (f"A chat between a curious user and an artificial intelligence assistant. "
-                f"The assistant gives helpful, detailed, "
-                f"and polite answers to the user's questions. USER: <image 1>\n<image 2>\n{prompt} ASSISTANT:")
-        text_chunks = [self.tokenizer(chunk).input_ids for chunk in text.split('<image 1>\n<image 2>\n')]
-        input_ids = torch.tensor(text_chunks[0] + [-201] + [-202] + text_chunks[1][self.offset_bos:], dtype=torch.long).unsqueeze(0).to('cuda')
+        # prompt = (
+        #     "Ignore walls, floors, ceilings, and windows. "
+        #     "List all detected objects and describe their spatial relationships, "
+        #     "including proximity and layout, based on depth information. "
+        #     "Focus on the 2D layout of the objects, considering their relative positions and distances to "
+        #     "support navigation tasks. Extract features that reflect these 3D spatial relationships."
+        # )
+        # batched_input_id = []
+        # for k in range(len(observations['gps'])):
+        #     prompt = self.form_prompt(observations[k])
+        #
+        #     text = (f"A chat between a curious user and an artificial intelligence assistant. "
+        #             f"The assistant gives helpful, detailed, "
+        #             f"and polite answers to the user's questions. USER: <image 1>\n<image 2>\n{prompt} ASSISTANT:")
+        #     text_chunks = [self.tokenizer(chunk).input_ids for chunk in text.split('<image 1>\n<image 2>\n')]
+        #     input_ids = torch.tensor(text_chunks[0] + [-201] + [-202] + text_chunks[1][self.offset_bos:], dtype=torch.long).unsqueeze(0).to('cuda')
+        #     batched_input_id.append(input_ids)
 
         # batch(n_env) x channel x height x width
         rgb_image = observations['rgb'].permute(0, 3, 1, 2)
@@ -650,7 +691,7 @@ class SpatialVLMEncoder(nn.Module):
         image_tensor = self.backbone.process_images(rgb_pil_images + depth_pil_images,
                                                self.backbone.config).to(dtype=self.backbone.dtype, device='cuda')
         self.backbone.get_vision_tower().to('cuda')
-        # self.backbone.eval()
+        self.backbone.eval()
 
         # batch(n_env) x channel x height x width
         rgb_image_tensor = image_tensor[:n_env, :, :, :]
@@ -659,35 +700,18 @@ class SpatialVLMEncoder(nn.Module):
         # if True:
         #     self.debug_image_tensor(image_tensor)
 
-        output = torch.zeros(n_env, 1, self.output_shape[-1], device='cuda')
+        output = torch.zeros(n_env, 2, 729, device='cuda')
 
         with torch.no_grad():
-            start = time.time()
-            for i in range(n_env):
-                # concatenate the rgb and depth images
-                image_tensor = torch.cat([rgb_image_tensor[i].unsqueeze(0),
-                                          depth_image_tensor[i].unsqueeze(0)], dim=0)
-                output_ids = self.backbone(
-                    input_ids,
-                    images=image_tensor,  # 2 x 3 x 384 x 384
-                    # max_new_tokens=250,
-                    use_cache=False,
-                    # repetition_penalty=1.0 # increase this to avoid chattering
-                )[0]
+            image_all = torch.concatenate([rgb_image_tensor,
+                                           depth_image_tensor
+                                           ], dim=0)
 
-                # x = self.delete_lm_head(output_ids)
+            output_image = self.backbone.get_vision_tower()(image_all)
+            x = F.adaptive_max_pool1d(output_image,
+                                      output_size=1).squeeze()
 
-                # # Max pooling along the token dimension (dim=1)
-                # x = F.adaptive_max_pool1d(output_ids.transpose(1, 2),
-                #                             output_size=1).transpose(1, 2)
-
-                # Linar linear along the embedding dimension (dim=2)
-
-                # or
-                x = output_ids[:, -1, :].unsqueeze(0)
-                output[i] = x
-
-            logging.info(f"Time taken for VLM forward pass: {time.time() - start:.2f}s for {n_env} environments")
+            output = x.view(n_env, 1, -1)
 
         return output
 
