@@ -19,7 +19,7 @@ from torchvision.transforms import functional as TF
 from torchvision import transforms
 
 # SigLip requirement
-from spatial_bot_test.modeling_bunny_phi import SigLipVisionTower
+from .spatial_bot_breakdown.module_handler import build_vision_tower
 from PIL import Image
 
 from habitat.tasks.nav.instance_image_nav_task import InstanceImageGoalSensor
@@ -525,14 +525,10 @@ class VisonTowerEncoder(nn.Module):
 
         if not self.is_blind:
             # load siglip model
-            vison_encoder = SigLipVisionTower(model_name,
-                                              vision_tower_cfg=None)
-            vison_encoder.load_model()
-            self.backbone = vison_encoder.to('cuda')
+            self.backbone = build_vision_tower(model_name).eval()
 
             for param in self.backbone.parameters():
                 param.requires_grad = False
-            self.backbone.eval()
 
             self.output_shape = (
                 1458, # number of tokens  # TODO
