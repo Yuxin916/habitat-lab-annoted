@@ -21,17 +21,17 @@ habitat:
 
 habitat_baselines:
   torch_gpu_id: 0
-  tensorboard_dir: "log/tb/siglip_backbone" #
-  video_dir: "log/video_dir/siglip_backbone" #
+  tensorboard_dir: "log/tb/vlm_adapter" #
+  video_dir: "log/video_dir/vlm_adapter" #
   test_episode_count: -1
-  eval_ckpt_path_dir: "ckpt/siglip_backbone/latest.pth" #
-  num_environments: 8 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
-  checkpoint_folder: "ckpt/siglip_backbone/" #
+  eval_ckpt_path_dir: "ckpt/vlm_adapter/latest.pth" #
+  num_environments: 2 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
+  checkpoint_folder: "ckpt/vlm_adapter/" #
   trainer_name: "ddppo"  # "ddppo" or "ppo" or "ver" (faster)
   num_updates: 27000
   log_interval: 5
-  log_file: "siglip_backbone.log" #
-  num_checkpoints: 100
+  log_file: "vlm_adapter.log" #
+  num_checkpoints: 500
   # Force PyTorch to be single threaded as
   # this improves performance considerably
   force_torch_single_threaded: True
@@ -43,7 +43,7 @@ habitat_baselines:
   rl:
     policy:
       main_agent:
-        name: "SigLipPolicy" # PointNavResNetPolicy | SpatialBotPolicy | SigLipPolicy
+        name: "SpatialBotPolicy" # PointNavResNetPolicy | SpatialBotPolicy | SigLipPolicy | VLMVisualPolicy
 
     ppo:
       # ppo params
@@ -83,6 +83,6 @@ habitat_baselines:
       reset_critic: False
 
       # Model parameters
-      backbone: SigLip # se_resneXt50 | BunnyPhiForCausalLM | SigLip
+      backbone: BunnyPhiForCausalLM # se_resneXt50 | BunnyPhiForCausalLM | SigLip | VLMVisonTowerEncoder
       rnn_type: LSTM
       num_recurrent_layers: 2

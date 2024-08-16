@@ -589,49 +589,6 @@ class VLMVisonTowerEncoder(nn.Module):
 
         return pil_images
 
-    def expand2square(self, pil_img, background_color):
-        width, height = pil_img.size
-        if width == height:
-            return pil_img
-        elif width > height:
-            result = Image.new(pil_img.mode, (width, width), background_color)
-            result.paste(pil_img, (0, (width - height) // 2))
-            return result
-        else:
-            result = Image.new(pil_img.mode, (height, height),
-                               background_color)
-            result.paste(pil_img, ((height - width) // 2, 0))
-            return result
-
-    def siglip_preprocess(self, images, model_config):
-        image_processor = self.backbone.image_processor
-        new_images = []
-        for image in images:
-            image = self.expand2square(image, tuple(
-                int(x * 255) for x in image_processor.image_mean))
-            image = image_processor.preprocess(image, return_tensors='pt')[
-                'pixel_values'][0]
-            new_images.append(image)
-        if all(x.shape == new_images[0].shape for x in new_images):
-            new_images = torch.stack(new_images, dim=0)
-
-        return new_images
-
-    def visualize_siglip_preprocess(self, image_tensor):
-        import matplotlib.pyplot as plt
-        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-        # Iterate over the two images
-        for i in range(2):
-            test_image = image_tensor.to('cpu').to(torch.float32)
-            img = test_image[i].permute(1, 2,
-                                        0).numpy()  # Change dimensions for visualization
-            axes[i].imshow(img)
-            axes[i].axis('off')  # Turn off axis
-
-        # Adjust layout
-        plt.tight_layout()
-        plt.show()
-
     def forward(self, observations: Dict[
         str, torch.Tensor]) -> torch.Tensor:  # type: ignore
 
