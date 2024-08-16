@@ -18,6 +18,10 @@ from habitat_baselines.rl.ddppo.policy import (  # noqa: F401.
     PointNavResNetPolicy,
     ObjectNavSpatialNet,
     SpatialBotPolicy,
+    SigLipPolicy,
+    ObjectNavSigLipNet,
+    VLMVisualPolicy,
+ObjectNavVLMVNet,
 )
 from habitat_baselines.rl.hrl.hierarchical_policy import (  # noqa: F401.
     HierarchicalPolicy,
@@ -275,7 +279,8 @@ class SingleAgentAccessMgr(AgentAccessMgr):
         self._actor_critic.load_state_dict(ckpt["state_dict"])
 
     def load_state_dict(self, state: Dict) -> None:
-        self._actor_critic.load_state_dict(state["state_dict"])
+        # ignore the visontower parameter
+        self._actor_critic.load_state_dict(state["state_dict"], strict=False)
         if self._updater is not None:
             self._updater.load_state_dict(state)
             if "lr_sched_state" in state:
@@ -320,6 +325,30 @@ def get_rollout_obs_space(obs_space, actor_critic, config):
             obs_space = spaces.Dict(
                 {
                     PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY: spaces.Box(
+                        low=np.finfo(np.float32).min,
+                        high=np.finfo(np.float32).max,
+                        shape=encoder.output_shape,
+                        dtype=np.float32,
+                    ),
+                    **obs_space.spaces,
+                }
+            )
+        elif encoder.__class__.__name__ == 'VisonTowerEncoder':
+            obs_space = spaces.Dict(
+                {
+                    ObjectNavSigLipNet.PRETRAINED_VISUAL_FEATURES_KEY: spaces.Box(
+                        low=np.finfo(np.float32).min,
+                        high=np.finfo(np.float32).max,
+                        shape=encoder.output_shape,
+                        dtype=np.float32,
+                    ),
+                    **obs_space.spaces,
+                }
+            )
+        elif encoder.__class__.__name__ == 'VLMVisonTowerEncoder':
+            obs_space = spaces.Dict(
+                {
+                    ObjectNavVLMVNet.PRETRAINED_VISUAL_FEATURES_KEY: spaces.Box(
                         low=np.finfo(np.float32).min,
                         high=np.finfo(np.float32).max,
                         shape=encoder.output_shape,

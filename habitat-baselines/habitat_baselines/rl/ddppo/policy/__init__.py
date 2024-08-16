@@ -12,3 +12,11 @@ from .foundation_policy import (  # noqa: F401.
 ObjectNavSpatialNet,
 SpatialBotPolicy,
 )
+from .siglip_pure_rgb_policy import (  # noqa: F401.
+    ObjectNavSigLipNet,
+    SigLipPolicy,
+)
+from .vlm_visual_policy import (  # noqa: F401.
+    ObjectNavVLMVNet,
+    VLMVisualPolicy,
+)

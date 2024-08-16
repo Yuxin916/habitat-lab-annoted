@@ -49,7 +49,7 @@ from habitat_baselines.rl.ddppo.ddp_utils import (
 if TYPE_CHECKING:
     from omegaconf import DictConfig
 
-from habitat_baselines.rl.ddppo.policy import PointNavResNetNet, ObjectNavSpatialNet
+from habitat_baselines.rl.ddppo.policy import PointNavResNetNet, ObjectNavSpatialNet, ObjectNavSigLipNet, ObjectNavVLMVNet
 from habitat_baselines.rl.ppo.agent_access_mgr import AgentAccessMgr
 from habitat_baselines.rl.ppo.evaluator import Evaluator
 from habitat_baselines.rl.ppo.single_agent_access_mgr import (  # noqa: F401.
@@ -284,6 +284,20 @@ class PPOTrainer(BaseRLTrainer):
                     batch[
                         PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY
                     ] = self._encoder(batch)
+            elif self._encoder.__class__.__name__ == "VisonTowerEncoder":
+                with inference_mode():
+                    batch[
+                        ObjectNavSigLipNet.PRETRAINED_VISUAL_FEATURES_KEY
+                    ] = self._encoder(batch)
+            elif self._encoder.__class__.__name__ == "VLMVisonTowerEncoder":
+                with inference_mode():
+                    batch[
+                        ObjectNavVLMVNet.PRETRAINED_VISUAL_FEATURES_KEY
+                    ] = self._encoder(batch)
+            else:
+                raise NotImplementedError(
+                    f"Encoder {self._encoder.__class__.__name__} not supported" # noqa: E501\
+                )
 
         self._agent.rollouts.insert_first_observations(batch)
 

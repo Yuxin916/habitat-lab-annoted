@@ -21,7 +21,11 @@ if TYPE_CHECKING:
     from omegaconf import DictConfig
 
 """
+train
 --config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.evaluate=False
+
+eval
+--config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.num_environments=1 habitat_baselines.evaluate=True
 
 add HABITAT_ENV_DEBUG=1 to environment variables to enable debug logging
 HABITAT_ENV_DEBUG=1;GLOG_minloglevel=2;MAGNUM_LOG=quiet;HABITAT_SIM_LOG=quiet;HF_HOME=/home/tsaisplus/mrs_llm/myproject/spatial_bot_test
