@@ -37,7 +37,7 @@ def make_env_fn(
     """
     temp change the dataset episode to only one episode
     """
-    dataset.episodes = dataset.episodes[:1]
+    dataset.episodes = dataset.episodes[:20]
     env = env_class(config=config, dataset=dataset)
     env.seed(config.seed)
     return env
