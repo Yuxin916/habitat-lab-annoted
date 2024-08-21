@@ -29,6 +29,7 @@ from habitat_baselines.common.tensor_dict import (
 from habitat_baselines.common.windowed_running_mean import WindowedRunningMean
 from habitat_baselines.rl.ddppo.policy.resnet_policy import PointNavResNetNet
 from habitat_baselines.rl.ddppo.policy.foundation_policy import ObjectNavSpatialNet
+from habitat_baselines.rl.ddppo.policy.siglip_pure_rgb_policy import ObjectNavSigLipNet
 from habitat_baselines.rl.ppo.policy import NetPolicy
 from habitat_baselines.rl.ver.task_enums import (
     EnvironmentWorkerTasks,
@@ -324,6 +325,14 @@ class InferenceWorkerProcess(ProcessBase):
                     obs[
                         PointNavResNetNet.PRETRAINED_VISUAL_FEATURES_KEY
                     ] = self.visual_encoder(obs)
+                elif isinstance(self.actor_critic.net, ObjectNavSigLipNet):
+                    obs[
+                        ObjectNavSigLipNet.PRETRAINED_VISUAL_FEATURES_KEY
+                    ] = self.visual_encoder(obs)
+                else:
+                    raise NotImplementedError(
+                        f"Static encoder not implemented for {type(self.actor_critic.net)}"
+                    )
 
             action_data = self.actor_critic.act(
                 obs,
