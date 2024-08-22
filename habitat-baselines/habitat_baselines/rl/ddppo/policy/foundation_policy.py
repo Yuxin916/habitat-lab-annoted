@@ -195,7 +195,11 @@ class ObjectNavSpatialNet(Net):
         discrete_actions: bool = True,
     ):
         super().__init__()
-        # previous action embedding
+        rnn_input_size = 0
+        self.discrete_actions = discrete_actions
+        self._hidden_size = hidden_size
+
+        # # previous action embedding
         self.prev_action_embedding: nn.Module
         self.discrete_actions = discrete_actions
         self._n_prev_action = 32
@@ -208,9 +212,7 @@ class ObjectNavSpatialNet(Net):
             self.prev_action_embedding = nn.Linear(
                 num_actions, self._n_prev_action
             )
-        self._n_prev_action = 32
-        rnn_input_size = self._n_prev_action  # test
-        self.discrete_actions = discrete_actions
+        rnn_input_size += self._n_prev_action
 
         # Only fuse the 1D state inputs. Other inputs are processed by the
         # visual encoder
@@ -229,14 +231,6 @@ class ObjectNavSpatialNet(Net):
                 InstanceImageGoalSensor.cls_uuid,
             }
             fuse_keys = [k for k in fuse_keys if k not in goal_sensor_keys]
-        self._fuse_keys_1d: List[str] = [
-            k for k in fuse_keys if len(observation_space.spaces[k].shape) == 1
-        ]
-        if len(self._fuse_keys_1d) != 0:
-            rnn_input_size += sum(
-                observation_space.spaces[k].shape[0]
-                for k in self._fuse_keys_1d
-            )
 
         # Add goal sensor embeddings
         if ObjectGoalSensor.cls_uuid in observation_space.spaces:
@@ -271,8 +265,6 @@ class ObjectNavSpatialNet(Net):
             self.compass_embedding = nn.Linear(input_compass_dim, 32)
             rnn_input_size += 32
 
-        self._hidden_size = hidden_size
-
         if force_blind_policy:
             use_obs_space = spaces.Dict({})
         else:
@@ -291,37 +283,10 @@ class ObjectNavSpatialNet(Net):
                 )
 
             if not self.visual_encoder.is_blind:
-                self.test = nn.Sequential(
-                    # (1, 1, 2560)
-                    nn.Conv2d(
-                        in_channels=1,
-                        out_channels=128,
-                        kernel_size=(1, 6),
-
-                    ),
-                    nn.ReLU(),
-                    # (128, 1458, 1)
-                    nn.Conv2d(
-                        in_channels=128,
-                        out_channels=256,
-                        kernel_size=(10, 1),
-                        stride=(10, 1)
-                    ),
-                    # (256, 145, 1)
-                    nn.ReLU(),
-                    nn.Conv2d(
-                        in_channels=256,
-                        out_channels=512,
-                        kernel_size=(10, 1),
-                        stride=(10, 1)
-                    ),
-                    # (512, 14, 1)
-                    nn.ReLU(),
-                )
-
                 self.adapter = nn.Sequential(
                     nn.Linear(
-                        2560, hidden_size
+                        self.visual_encoder.backbone.config.hidden_size,
+                        hidden_size
                     ),
                     nn.ReLU(),
                     nn.Linear(
@@ -395,71 +360,12 @@ class ObjectNavSpatialNet(Net):
             aux_loss_state["perception_embed"] = visual_feats
             x.append(visual_feats)
 
-        if len(self._fuse_keys_1d) != 0:
-            fuse_states = torch.cat(
-                [observations[k] for k in self._fuse_keys_1d], dim=-1
-            )
-            x.append(fuse_states.float())
-
-        if IntegratedPointGoalGPSAndCompassSensor.cls_uuid in observations:
-            goal_observations = observations[
-                IntegratedPointGoalGPSAndCompassSensor.cls_uuid
-            ]
-            if goal_observations.shape[1] == 2:
-                # Polar Dimensionality 2
-                # 2D polar transform
-                goal_observations = torch.stack(
-                    [
-                        goal_observations[:, 0],
-                        torch.cos(-goal_observations[:, 1]),
-                        torch.sin(-goal_observations[:, 1]),
-                    ],
-                    -1,
-                )
-            else:
-                assert (
-                    goal_observations.shape[1] == 3
-                ), "Unsupported dimensionality"
-                vertical_angle_sin = torch.sin(goal_observations[:, 2])
-                # Polar Dimensionality 3
-                # 3D Polar transformation
-                goal_observations = torch.stack(
-                    [
-                        goal_observations[:, 0],
-                        torch.cos(-goal_observations[:, 1])
-                        * vertical_angle_sin,
-                        torch.sin(-goal_observations[:, 1])
-                        * vertical_angle_sin,
-                        torch.cos(goal_observations[:, 2]),
-                    ],
-                    -1,
-                )
-
-            x.append(self.tgt_embeding(goal_observations))
-
-        if PointGoalSensor.cls_uuid in observations:
-            goal_observations = observations[PointGoalSensor.cls_uuid]
-            x.append(self.pointgoal_embedding(goal_observations))
-
-        if ProximitySensor.cls_uuid in observations:
-            sensor_observations = observations[ProximitySensor.cls_uuid]
-            x.append(self.proximity_embedding(sensor_observations))
-
-        if HeadingSensor.cls_uuid in observations:
-            sensor_observations = observations[HeadingSensor.cls_uuid]
-            sensor_observations = torch.stack(
-                [
-                    torch.cos(sensor_observations[0]),
-                    torch.sin(sensor_observations[0]),
-                ],
-                -1,
-            )
-            x.append(self.heading_embedding(sensor_observations))
-
+        # Object goal
         if ObjectGoalSensor.cls_uuid in observations:
             object_goal = observations[ObjectGoalSensor.cls_uuid].long()
             x.append(self.obj_categories_embedding(object_goal).squeeze(dim=1))
 
+        # Compass
         if EpisodicCompassSensor.cls_uuid in observations:
             compass_observations = torch.stack(
                 [
@@ -472,23 +378,12 @@ class ObjectNavSpatialNet(Net):
                 self.compass_embedding(compass_observations.squeeze(dim=1))
             )
 
+        # GPS
         if EpisodicGPSSensor.cls_uuid in observations:
             x.append(
                 self.gps_embedding(observations[EpisodicGPSSensor.cls_uuid])
             )
 
-        for uuid in [
-            ImageGoalSensor.cls_uuid,
-            InstanceImageGoalSensor.cls_uuid,
-        ]:
-            if uuid in observations:
-                goal_image = observations[uuid]
-
-                goal_visual_encoder = getattr(self, f"{uuid}_encoder")
-                goal_visual_output = goal_visual_encoder({"rgb": goal_image})
-
-                goal_visual_fc = getattr(self, f"{uuid}_fc")
-                x.append(goal_visual_fc(goal_visual_output))
 
         if self.discrete_actions:
             prev_actions = prev_actions.squeeze(-1)
@@ -501,7 +396,6 @@ class ObjectNavSpatialNet(Net):
             prev_actions = self.prev_action_embedding(
                 masks * prev_actions.float()
             )
-
         x.append(prev_actions)
 
         try:
@@ -550,27 +444,27 @@ class SpatialVLMEncoder(nn.Module):
                 torch_dtype=torch.float16,  # float32 for cpu
                 device_map='auto',
                 trust_remote_code=True).to(torch.float16).eval()
+            # load vision tower weights
             self.vision_tower = self.backbone.get_vision_tower()
             if not self.vision_tower.is_loaded:
                 self.vision_tower.load_model()
             # get self.backbone parameter size
             self.backbone_size = sum(p.numel() for p in self.backbone.parameters())
+            logging.info(f"Backbone size: {self.backbone_size}")
+
+            self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(self.backbone)
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
-                trust_remote_code=True)
+                trust_remote_code=True
+            )
 
             # for batch inference
             self.tokenizer.padding_side = "left"
             self.tokenizer.pad_token_id = self.backbone.generation_config.pad_token_id
-            padding_max_length = 128  # customize for your circumstance
-            self.tokenizer.add_tokens(['<image>'])
-            image_token_id = self.tokenizer.convert_tokens_to_ids('<image>')
 
             for param in self.backbone.parameters():
                 param.requires_grad = False
-            self.backbone.lm_head = nn.Sequential()
-            self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(self.backbone)
 
             self.output_shape = (
                 1,
@@ -590,6 +484,7 @@ class SpatialVLMEncoder(nn.Module):
         - Rescale the normalized images to the range [0, 255] and convert to uint8.
         """
         # batch(n_env) x channel x height x width
+        image = image[:, :3]  # Ensure only RGB channels are considered
         # Get the dimensions
         B, C, H, W = image.size()
 
@@ -628,16 +523,7 @@ class SpatialVLMEncoder(nn.Module):
         robot_position = f"GPS: {str_gps}  Compass: {str_compass}"
 
         prompt_template = """
-        Objective:
-        Control a robot equipped with RGB-D sensors to locate {GOAL_NAME}
-
-        Strategy:
-        Take note all detected objects and their spatial relationships,
-        including proximity and layout, based on depth information.
-        Commonsense reasoning about the relationship between target object and detected objects.
-
-        Task: Locate the {GOAL_NAME}
-        Position: You are at {ROBOT_POSITION}
+        Find the {GOAL_NAME}. If the object is not visible or the images provided are not clear, list objects that goal object is typically found near in home scenes.
         """
         prompt = prompt_template.format(GOAL_NAME=category_to_id[goal_name[0]],
                                         ROBOT_POSITION=robot_position)
@@ -645,49 +531,100 @@ class SpatialVLMEncoder(nn.Module):
 
     def visualize_tensor_preprocess(self, image_tensor):
         import matplotlib.pyplot as plt
-        fig, axs = plt.subplots(3, 2, figsize=(10, 15))
-        image_tensor = image_tensor.to(torch.float32)
-        for i in range(3):  # Loop over the 3 environments
-            for j in range(2):  # Loop over the 2 images per environment
-                # Select the corresponding image and transpose it to (384, 384, 3) for visualization
-                image = image_tensor[i, j].permute(1, 2, 0).cpu().numpy()
-                axs[i, j].imshow(image)
-                axs[i, j].axis('off')  # Turn off axis labels
 
-        plt.tight_layout()
-        plt.show()
+        # first and second axis concatenation
+        image_tensor = image_tensor.view(-1, 3, 384, 384)
 
-    def forward(self, observations: Dict[
-        str, torch.Tensor]) -> torch.Tensor:  # type: ignore
+        # Ensure the tensor is on the CPU and in float32 for visualization
+        if image_tensor.is_cuda:
+            image_tensor = image_tensor.cpu()
+
+        # Convert to float32 if it's in float16
+        if image_tensor.dtype == torch.float16:
+            image_tensor = image_tensor.to(torch.float32)
+
+        # Normalize the tensor to the [0, 1] range for visualization (optional)
+        # This step is often necessary if your tensor has values outside the [0, 1] range
+        image_tensor = (image_tensor - image_tensor.min()) / (
+                image_tensor.max() - image_tensor.min())
+
+        batch_size, channels, height, width = image_tensor.shape
+
+        # If the tensor has more than one image, visualize them one by one
+        for i in range(batch_size):
+            img = image_tensor[i]  # Select the i-th image
+
+            if channels == 1:
+                # If the image is grayscale, remove the channel dimension
+                img = img.squeeze(0)
+                plt.imshow(img, cmap='gray')
+            else:
+                # Transpose to [H, W, C] for RGB display
+                img = img.permute(1, 2, 0)
+                plt.imshow(img)
+
+            plt.axis('off')  # Hide axis labels
+            plt.show()
+
+    def prepare_input_ids(self, observations):
+        batch_size = observations['gps'].shape[0]
+        # text prompt
+        # Formulate text prompts for all observations at once
+        prompts = [
+            self.form_prompt(
+                {key: value[i] for key, value in observations.items()})
+            for i in range(batch_size)
+        ]
+
+        texts = [
+            (
+                f"A chat between a curious user and an artificial intelligence assistant. "
+                f"The assistant gives helpful, detailed, and polite answers to the user's questions. "
+                f"USER: <image 1>\n<image 2>\n{prompt} ASSISTANT:"
+            )
+            for prompt in prompts
+        ]
+
+        # Tokenize the texts and create input_ids tensors
+        tokenized_chunks = [
+            [self.tokenizer(chunk).input_ids for chunk in text.split('<image 1>\n<image 2>\n')]
+            for text in texts
+        ]
+
+        # Combine tokenized chunks with special tokens and create input tensors
+        input_ids_list = [
+            torch.tensor(chunk[0] + [-201] + [-202] + chunk[1][self.offset_bos:], dtype=torch.long).unsqueeze(0).to(self.backbone.device)
+            for chunk in tokenized_chunks
+        ]
+
+        # Find the maximum length for padding
+        max_length = max(ids.shape[-1] for ids in input_ids_list)
+
+        # Pad the sequences to the maximum length and stack into a batch
+        padded_input_ids_batch = torch.stack([
+            torch.cat([ids, torch.full((1, max_length - ids.shape[-1]),
+                                       self.tokenizer.pad_token_id,
+                                       dtype=torch.long, device=ids.device)], dim=-1)
+            for ids in input_ids_list
+        ]).squeeze(1).to(self.backbone.device)
+
+        return padded_input_ids_batch
+
+    def forward(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:  # type: ignore
+
+        self.backbone.eval()
 
         if self.is_blind:
             return None
 
-        # text prompt
-        batched_input_id = []
-        for k in range(len(observations['gps'])):
-            prompt = self.form_prompt(observations[k])
-
-            text = (f"A chat between a curious user and an artificial intelligence assistant. "
-                    f"The assistant gives helpful, detailed, "
-                    f"and polite answers to the user's questions. USER: <image 1>\n<image 2>\n{prompt} ASSISTANT:")
-            text_chunks = [self.tokenizer(chunk).input_ids for chunk in text.split('<image 1>\n<image 2>\n')]
-            input_ids = torch.tensor(text_chunks[0] + [-201] + [-202] + text_chunks[1][self.offset_bos:], dtype=torch.long).unsqueeze(0).to('cuda')
-            batched_input_id.append(input_ids)
-
-        max_length = max(ids.shape[-1] for ids in batched_input_id)
-        padded_input_ids_batch = torch.stack([
-            torch.cat([ids, torch.full((1, max_length - ids.shape[-1]),
-                                       self.tokenizer.pad_token_id,
-                                       dtype=torch.long,
-                                       device=ids.device
-                                       )], dim=-1)
-            for ids in batched_input_id
-        ]).to('cuda').squeeze(1)
+        # batch(n_env) x input_length
+        padded_input_ids_batch = self.prepare_input_ids(observations)
 
         # batch(n_env) x channel x height x width
         rgb_image = observations['rgb'].permute(0, 3, 1, 2)
         depth_image = observations['depth'].permute(0, 3, 1, 2)
+
+        # batch_size
         n_env = rgb_image.size(0)
 
         # Pre-process the images
@@ -699,30 +636,32 @@ class SpatialVLMEncoder(nn.Module):
         processed_images = self.backbone.process_images(
             # element by element concatenation
             [val for pair in zip(rgb_pil_images, depth_pil_images) for val in pair],
-            self.backbone.config).to(dtype=self.backbone.dtype, device='cuda').view(n_env, 2, 3, 384, 384)
-        self.backbone.get_vision_tower().to('cuda')
+            self.backbone.config).to(dtype=self.backbone.dtype, device=self.backbone.device).view(n_env, 2, 3, 384, 384)
+        self.backbone.get_vision_tower().to(self.backbone.device)
 
         # visualize the pre-processed images
         # self.visualize_tensor_preprocess(processed_images)
 
-        with torch.no_grad():
-            # image_all = torch.concatenate([rgb_image_tensor,
-            #                                depth_image_tensor
-            #                                ], dim=0)
+        # batch x output_id
+        start_time = time.time()
+        outputs = self.backbone.generate(
+            padded_input_ids_batch, # n_env x input_length
+            images=processed_images,  # n_env x 2 x 3 x 384 x 384
+            max_new_tokens=100,
+            output_hidden_states=True,
+            return_dict_in_generate=True,
+            use_cache=True,
+            # output_attentions=True
+        )
+        print(f"Time taken: {time.time() - start_time:.2f}s")
+        # The generated sequences
+        generated_sequences = outputs.sequences
 
-            # 2, 1590, 2560
-            output_ids = self.backbone(
-                        padded_input_ids_batch, # n_env x input_length
-                        images=processed_images,  # n_env x 2 x 3 x 384 x 384
-                        use_cache=True,
-                        output_hidden_states=True,
-                        output_attentions=True
-                    ).hidden_states[-1]
+        print([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
+                                                                  skip_special_tokens=True)])
 
-
-            pooled_output = torch.max(output_ids, dim=1).values.unsqueeze(1)
-
-        return pooled_output
+        # TODO: last layer's last token directly
+        return outputs.hidden_states[-1][-1]
 
     def debug_image_tensor(self, image_tensor):
         import matplotlib.pyplot as plt
@@ -748,6 +687,18 @@ def override(
     # images: 2 x 2 x 3 x 384 x 384
     # rest all are None
     vision_tower = self.get_vision_tower()
+    if vision_tower is None or images is None or input_ids.shape[1] == 1:
+        # auto-regressive generation, input_ids is a single token
+        if past_key_values is not None and vision_tower is not None and images is not None and input_ids.shape[
+            1] == 1:
+            target_shape = past_key_values[-1][-1].shape[-2] + 1
+            attention_mask = torch.cat((attention_mask, torch.ones(
+                (attention_mask.shape[0], target_shape - attention_mask.shape[1]),
+                dtype=attention_mask.dtype,
+                device=attention_mask.device
+            )), dim=1)
+            position_ids = torch.sum(attention_mask, dim=1).unsqueeze(-1) - 1
+        return input_ids, position_ids, attention_mask, past_key_values, None, labels
 
     if images.ndim == 5:
         # n_env x 2 x 3 x 384 x 384 -> 4 x 3 x 384 x 384
@@ -919,4 +870,5 @@ def override(
 
     if _position_ids is None:
         position_ids = None
+
     return None, position_ids, attention_mask, past_key_values, new_input_embeds, new_labels
