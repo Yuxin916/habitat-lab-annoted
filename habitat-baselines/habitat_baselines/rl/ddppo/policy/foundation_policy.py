@@ -17,6 +17,7 @@ from torch.nn import functional as F
 from torchvision import transforms as T
 from torchvision.transforms import functional as TF
 from torchvision import transforms
+import logging
 
 # VLM requirement
 from torchvision.transforms import ToPILImage
@@ -401,10 +402,10 @@ class ObjectNavSpatialNet(Net):
         try:
             out = torch.cat(x, dim=1)
         except Exception as e:
-            print(f"Error: {e}")
+            logging.info(f"Error: {e}")
             # Handle the error by inspecting tensor shapes
             for i, tensor in enumerate(x):
-                print(f"Tensor {i} shape: {tensor.shape}")
+                logging.info(f"Tensor {i} shape: {tensor.shape}")
         out, rnn_hidden_states = self.state_encoder(
             out, rnn_hidden_states, masks, rnn_build_seq_info
         )
@@ -653,11 +654,11 @@ class SpatialVLMEncoder(nn.Module):
             use_cache=True,
             # output_attentions=True
         )
-        print(f"Time taken: {time.time() - start_time:.2f}s")
+        logging.info(f"Time taken: {time.time() - start_time:.2f}s")
         # The generated sequences
         generated_sequences = outputs.sequences
 
-        print([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
+        logging.debug([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
                                                                   skip_special_tokens=True)])
 
         # TODO: last layer's last token directly
