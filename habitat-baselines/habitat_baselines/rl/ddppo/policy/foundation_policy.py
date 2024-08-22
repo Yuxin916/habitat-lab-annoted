@@ -523,8 +523,11 @@ class SpatialVLMEncoder(nn.Module):
         str_compass = parse_tensor_value(observations['compass'])
         robot_position = f"GPS: {str_gps}  Compass: {str_compass}"
 
+        # prompt_template = """
+        # Find the {GOAL_NAME}. If the object is not visible or the images provided are not clear, list objects that goal object is typically found near in home scenes.
+        # """
         prompt_template = """
-        Find the {GOAL_NAME}. If the object is not visible or the images provided are not clear, list objects that goal object is typically found near in home scenes.
+        What object is in the image?
         """
         prompt = prompt_template.format(GOAL_NAME=category_to_id[goal_name[0]],
                                         ROBOT_POSITION=robot_position)
@@ -643,6 +646,29 @@ class SpatialVLMEncoder(nn.Module):
         # visualize the pre-processed images
         # self.visualize_tensor_preprocess(processed_images)
 
+        # start_time = time.time()
+        # hidden_states = []
+        # for i in range(n_env):
+        #     outputs = self.backbone.generate(
+        #         padded_input_ids_batch[i].unsqueeze(0),  # 1 x input_length
+        #         images=processed_images[i],  # 2 x 3 x 384 x 384
+        #         max_new_tokens=250,
+        #         output_hidden_states=True,
+        #         return_dict_in_generate=True,
+        #         use_cache=True,
+        #         repetition_penalty=1.0  # increase this to avoid chattering
+        #     )
+        #     logging.info(self.tokenizer.decode(outputs.sequences[0][padded_input_ids_batch.shape[1]:],
+        #                                         skip_special_tokens=True).strip())
+        #     hidden_states.append(outputs.hidden_states[-1][-1])
+        #
+        #
+        # logging.info(f"Time taken: {time.time() - start_time:.2f}s")
+        #
+        # return torch.stack(hidden_states).squeeze(1)
+
+
+
         # batch x output_id
         start_time = time.time()
         outputs = self.backbone.generate(
@@ -658,7 +684,7 @@ class SpatialVLMEncoder(nn.Module):
         # The generated sequences
         generated_sequences = outputs.sequences
 
-        logging.debug([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
+        logging.info([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
                                                                   skip_special_tokens=True)])
 
         # TODO: last layer's last token directly
