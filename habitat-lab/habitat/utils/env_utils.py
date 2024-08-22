@@ -38,6 +38,9 @@ def make_env_fn(
     temp change the dataset episode to only one episode
     """
     dataset.episodes = dataset.episodes[:20]
+    # dataset.episodes = dataset.episodes[20:28]
+    # for i in range(len(dataset.episodes)):
+    #     print(dataset.episodes[i].object_category, dataset.episodes[i].info['closest_goal_object_id'], dataset.episodes[i].start_position)
     env = env_class(config=config, dataset=dataset)
     env.seed(config.seed)
     return env
