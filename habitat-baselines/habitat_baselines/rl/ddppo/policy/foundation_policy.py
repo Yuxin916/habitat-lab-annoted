@@ -71,6 +71,7 @@ except ImportError:
 
 IMAGE_TOKEN_INDEX = [-201, -202]
 IGNORE_INDEX = -100
+choose_prompt = False
 
 @baseline_registry.register_policy
 class SpatialBotPolicy(NetPolicy):
@@ -523,12 +524,12 @@ class SpatialVLMEncoder(nn.Module):
         str_compass = parse_tensor_value(observations['compass'])
         robot_position = f"GPS: {str_gps}  Compass: {str_compass}"
 
+        # prompt_template = """Find the {GOAL_NAME}. List objects that the goal object is typically found near to."""
         # prompt_template = """
-        # Find the {GOAL_NAME}. If the object is not visible or the images provided are not clear, list objects that goal object is typically found near in home scenes.
+        # "Ignore wall, floor, ceiling, and window. "
+        # List all objects detected and describe their relation to '{GOAL_NAME}' in home scene.
         # """
-        prompt_template = """
-        What object is in the image?
-        """
+        prompt_template = """What object is in the image?"""
         prompt = prompt_template.format(GOAL_NAME=category_to_id[goal_name[0]],
                                         ROBOT_POSITION=robot_position)
         return prompt
@@ -579,6 +580,7 @@ class SpatialVLMEncoder(nn.Module):
                 {key: value[i] for key, value in observations.items()})
             for i in range(batch_size)
         ]
+        # logging.info('Prompts:' + str(prompts))
 
         texts = [
             (
@@ -646,6 +648,7 @@ class SpatialVLMEncoder(nn.Module):
         # visualize the pre-processed images
         # self.visualize_tensor_preprocess(processed_images)
 
+        """for loop inference"""
         # start_time = time.time()
         # hidden_states = []
         # for i in range(n_env):
@@ -666,29 +669,43 @@ class SpatialVLMEncoder(nn.Module):
         # logging.info(f"Time taken: {time.time() - start_time:.2f}s")
         #
         # return torch.stack(hidden_states).squeeze(1)
+        """for loop inference"""
 
-
-
-        # batch x output_id
-        start_time = time.time()
-        outputs = self.backbone.generate(
-            padded_input_ids_batch, # n_env x input_length
+        # start_time = time.time()
+        last_hidden_layer = self.backbone(
+            padded_input_ids_batch,  # n_env x input_length
             images=processed_images,  # n_env x 2 x 3 x 384 x 384
-            max_new_tokens=100,
             output_hidden_states=True,
-            return_dict_in_generate=True,
             use_cache=True,
-            # output_attentions=True
-        )
-        logging.info(f"Time taken: {time.time() - start_time:.2f}s")
-        # The generated sequences
-        generated_sequences = outputs.sequences
+        ).hidden_states[-1]  # Final layer hidden states
+        # logging.info(f"Time taken for forward pass: {time.time() - start_time:.2f}s")
 
-        logging.info([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
-                                                                  skip_special_tokens=True)])
+        max_pooled_hidden_state = F.max_pool1d(last_hidden_layer.permute(0, 2, 1),
+                                               kernel_size=last_hidden_layer.size(1)).permute(0, 2, 1)
+        if choose_prompt:
+            # batch x output_id
+            start_time = time.time()
+            outputs = self.backbone.generate(
+                padded_input_ids_batch, # n_env x input_length
+                images=processed_images,  # n_env x 2 x 3 x 384 x 384
+                max_new_tokens=100,
+                output_hidden_states=True,
+                return_dict_in_generate=True,
+                use_cache=True,
+                # output_attentions=True
+            )
+            logging.info(f"Time taken: {time.time() - start_time:.2f}s")
+            # The generated sequences
+            generated_sequences = outputs.sequences
 
-        # TODO: last layer's last token directly
-        return outputs.hidden_states[-1][-1]
+            # logging.info([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
+            #                                                           skip_special_tokens=True)])
+            for ans in self.tokenizer.batch_decode(
+                generated_sequences[:, padded_input_ids_batch.shape[1]:],
+                skip_special_tokens=True):
+                logging.info(ans.strip())
+
+        return max_pooled_hidden_state
 
     def debug_image_tensor(self, image_tensor):
         import matplotlib.pyplot as plt
