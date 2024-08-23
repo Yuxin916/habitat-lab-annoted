@@ -40,7 +40,6 @@ HABITAT_ENV_DEBUG=1;GLOG_minloglevel=2;MAGNUM_LOG=quiet;HABITAT_SIM_LOG=quiet;HF
     config_name="pointnav/ppo_pointnav_example",
 )
 def main(cfg: "DictConfig"):
-    dist.init_process_group(backend='nccl')
     cfg = patch_config(cfg)
     execute_exp(cfg, "eval" if cfg.habitat_baselines.evaluate else "train")
 
