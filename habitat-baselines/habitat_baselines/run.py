@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING
 import hydra
 import numpy as np
 import torch
+import torch.distributed as dist
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from habitat.config.default import patch_config
 from habitat.config.default_structured_configs import register_hydra_plugin
@@ -37,6 +40,7 @@ HABITAT_ENV_DEBUG=1;GLOG_minloglevel=2;MAGNUM_LOG=quiet;HABITAT_SIM_LOG=quiet;HF
     config_name="pointnav/ppo_pointnav_example",
 )
 def main(cfg: "DictConfig"):
+    dist.init_process_group(backend='nccl')
     cfg = patch_config(cfg)
     execute_exp(cfg, "eval" if cfg.habitat_baselines.evaluate else "train")
 
