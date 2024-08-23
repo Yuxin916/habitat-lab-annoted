@@ -14,36 +14,35 @@ habitat:
     slack_reward: -1e-3
   dataset:
     # use the clean habitat v2 dataset
-    split: "minival"
-    # the reason why i use absolute path, i download data to another folder
+    split: "one"
     data_path: "data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz"
     scenes_dir: "data/scene_datasets/"
 
 habitat_baselines:
   torch_gpu_id: 0
-  tensorboard_dir: "log/tb/pure_vlm_adapter" #
-  video_dir: "log/video_dir/pure_vlm_adapter" #
+  tensorboard_dir: "log/tb/debug" #
+  video_dir: "log/video_dir/debug" #
   test_episode_count: -1
-  eval_ckpt_path_dir: "ckpt/pure_vlm_adapter/latest.pth" #
-  num_environments: 4 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
-  checkpoint_folder: "ckpt/pure_vlm_adapter/" #
+  eval_ckpt_path_dir: "ckpt/debug/latest.pth" #
+  num_environments: 3 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
+  checkpoint_folder: "ckpt/debug/" #
   trainer_name: "ddppo"  # "ddppo" or "ppo" or "ver" (faster)
-  num_updates: 270000
+  num_updates: 27000
   log_interval: 5
-  log_file: "pure_vlm_adapter.log" #
-  num_checkpoints: 100
+  log_file: "log/log/debug.log" #
+  num_checkpoints: 500
   # Force PyTorch to be single threaded as
   # this improves performance considerably
   force_torch_single_threaded: True
 
   eval:
-    split: "minival"
+    split: "one"
     video_option: ["disk", "tensorboard"]
 
   rl:
     policy:
       main_agent:
-        name: "SpatialBotPolicy" # PointNavResNetPolicy | SpatialBotPolicy
+        name: "PointNavResNetPolicy" # PointNavResNetPolicy | SpatialBotPolicy | SigLipPolicy | VLMVisualPolicy
 
     ppo:
       # ppo params
@@ -52,7 +51,7 @@ habitat_baselines:
       num_mini_batch: 2
       value_loss_coef: 0.5
       entropy_coef: 0.01
-      lr: 2.5e-4
+      lr: 8.0e-4
       eps: 1e-5
       max_grad_norm: 0.2
       num_steps: 128
@@ -83,6 +82,6 @@ habitat_baselines:
       reset_critic: False
 
       # Model parameters
-      backbone: BunnyPhiForCausalLM # se_resneXt50 | BunnyPhiForCausalLM
+      backbone: se_resneXt50 # se_resneXt50 | BunnyPhiForCausalLM | SigLip | VLMVisonTowerEncoder
       rnn_type: LSTM
       num_recurrent_layers: 2
