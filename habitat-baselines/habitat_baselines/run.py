@@ -10,9 +10,6 @@ from typing import TYPE_CHECKING
 import hydra
 import numpy as np
 import torch
-import torch.distributed as dist
-from torch.utils.data.distributed import DistributedSampler
-from torch.nn.parallel import DistributedDataParallel as DDP
 
 from habitat.config.default import patch_config
 from habitat.config.default_structured_configs import register_hydra_plugin
@@ -25,7 +22,7 @@ if TYPE_CHECKING:
 
 """
 train
---config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.evaluate=False
+--config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ddppo habitat_baselines.evaluate=False
 
 eval
 --config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.num_environments=1 habitat_baselines.evaluate=True
