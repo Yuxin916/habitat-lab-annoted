@@ -459,12 +459,6 @@ class SpatialVLMEncoder(nn.Module):
             self.backbone_size = sum(p.numel() for p in self.backbone.parameters())
             logging.info(f"Backbone size: {self.backbone_size}")
 
-            # Override the function in the backbone model
-            self.backbone.encode_images = override_encode_images.__get__(
-                self.backbone)
-            self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(
-                self.backbone)
-
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
                 trust_remote_code=True
@@ -627,6 +621,12 @@ class SpatialVLMEncoder(nn.Module):
 
     def forward(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:  # type: ignore
 
+        # Override the function in the backbone model
+        self.backbone.encode_images = override_encode_images.__get__(
+            self.backbone)
+        self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(
+            self.backbone)
+
         self.backbone.eval()
 
         if self.is_blind:
@@ -735,21 +735,26 @@ def override_encode_images(self, images):
     Override method to encode images in the backbone model.
     This function assumes it is being called within the context of the backbone model.
     """
-    # Get the vision tower, assuming it is already correctly attached to `self` (i.e., self is self.backbone)
+    # Get the vision tower and its device
     vision_tower = self.get_vision_tower()
-
-    # Ensure images are on the same device as the vision tower
     vision_tower_device = next(vision_tower.parameters()).device
+    logging.info(f"vision_tower_device: {vision_tower_device}")
+
+    # Move images to the vision tower's device
     images = images.to(vision_tower_device)
+    logging.info(f"Images moved to device: {images.device}")
 
     # Encode images using the vision tower
     image_features = vision_tower(images)
+    logging.info(f"Image features device after vision tower: {image_features.device}")
 
     # Determine the device of mm_projector
     mm_projector_device = next(self.get_model().mm_projector.parameters()).device
+    logging.info(f"mm_projector_device: {mm_projector_device}")
 
-    # Move image_features to the same device as mm_projector
+    # Move image_features to the mm_projector's device
     image_features = image_features.to(mm_projector_device)
+    logging.info(f"Image features moved to mm_projector device: {image_features.device}")
 
     # Apply mm_projector on the image features
     image_features = self.get_model().mm_projector(image_features)
@@ -823,13 +828,6 @@ def override(
         if images_device != vision_tower_device:
             images = images.to(vision_tower_device)
         concat_images = torch.cat([image.to(vision_tower_device) for image in images], dim=0)
-        # log current rank
-        logging.info('current rank: ' + str(torch.distributed.get_rank())
-                     +
-                     '\n' + 'concat_images device: ' + str(concat_images.device)
-                     +
-                     '\n' + 'self.device: ' + str(self.device)
-                     )
 
         image_features = self.encode_images(concat_images)
 
