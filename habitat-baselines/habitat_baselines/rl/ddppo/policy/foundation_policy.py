@@ -781,12 +781,8 @@ def override(
 
     # Get the vision tower (assuming it's a part of the model and resides on a specific device)
     vision_tower = self.get_vision_tower()
-
     # Ensure images are on the same device as the vision tower
-    if images is not None:
-        vision_tower_device = next(vision_tower.parameters()).device
-        if images_device != vision_tower_device:
-            images = images.to(vision_tower_device)
+    vision_tower_device = next(vision_tower.parameters()).device
 
     # Determine the device of the embed_tokens layer
     embed_tokens_device = next(self.get_model().embed_tokens.parameters()).device
@@ -824,9 +820,16 @@ def override(
     # Handling images and feature extraction
     if images.ndim == 5:
         # n_env x 2 x 3 x 384 x 384 -> 4 x 3 x 384 x 384
+        if images_device != vision_tower_device:
+            images = images.to(vision_tower_device)
         concat_images = torch.cat([image.to(vision_tower_device) for image in images], dim=0)
-        logging.info('concat_images device: ' + str(concat_images.device))
-        logging.info('self.device: ' + str(self.device))
+        # log current rank
+        logging.info('current rank: ' + str(torch.distributed.get_rank())
+                     +
+                     '\n' + 'concat_images device: ' + str(concat_images.device)
+                     +
+                     '\n' + 'self.device: ' + str(self.device)
+                     )
 
         image_features = self.encode_images(concat_images)
 
