@@ -848,8 +848,8 @@ def override(
         except Exception as e:
             # device
             logging.info('self.device:' + str(self.device))
-            logging.info('cur_input_embeds device:' + str(cur_input_embeds.device))
             logging.info('torch.cat(cur_input_ids_noim) device:' + str(torch.cat(cur_input_ids_noim).device))
+            # logging.info('cur_input_embeds device:' + str(cur_input_embeds.device))
         cur_input_embeds_no_im = torch.split(cur_input_embeds, split_sizes,
                                              dim=0)
         cur_new_input_embeds = []
