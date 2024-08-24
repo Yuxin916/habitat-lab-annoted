@@ -449,8 +449,8 @@ class SpatialVLMEncoder(nn.Module):
                 torch_dtype=torch.float16,  # float32 for cpu
                 device_map='balanced_low_0',
                 trust_remote_code=True).to(torch.float16).eval()
-            for name, param in self.backbone.named_parameters():
-                logging.info(f"Parameter: {name} is on device: {param.device}")
+            # for name, param in self.backbone.named_parameters():
+            #     logging.info(f"Parameter: {name} is on device: {param.device}")
             # load vision tower weights
             self.vision_tower = self.backbone.get_vision_tower()
             if not self.vision_tower.is_loaded:
@@ -780,8 +780,6 @@ def override(
     if images.ndim == 5:
         # n_env x 2 x 3 x 384 x 384 -> 4 x 3 x 384 x 384
         concat_images = torch.cat([image.to(images_device) for image in images], dim=0)
-        logging.info('concat_images device: ' + str(concat_images.device))
-        logging.info('self.device: ' + str(self.device))
 
         image_features = self.encode_images(concat_images).to(images_device) # Align to the same device as text inputs
 
@@ -851,7 +849,7 @@ def override(
             cur_labels_noim.append(cur_labels[image_token_indices[i] + 1:image_token_indices[i + 1]])
 
         split_sizes = [x.shape[0] for x in cur_labels_noim]
-        cur_input_embeds = self.get_model().embed_tokens(torch.cat(cur_input_ids_noim).to(self.device))
+        cur_input_embeds = self.get_model().embed_tokens(torch.cat(cur_input_ids_noim))
         cur_input_embeds_no_im = torch.split(cur_input_embeds, split_sizes, dim=0)
 
         cur_new_input_embeds = []
