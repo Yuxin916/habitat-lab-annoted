@@ -729,13 +729,18 @@ class SpatialVLMEncoder(nn.Module):
         plt.show()
 
 def override_encode_images(self, images):
+    # Get image features from the vision tower
     image_features = self.get_model().get_vision_tower()(images)
+
     # Determine the device of mm_projector
     mm_projector_device = next(self.get_model().mm_projector.parameters()).device
 
-    # Ensure image_features are on the same device as mm_projector
+    # Move image_features to the same device as mm_projector
     image_features = image_features.to(mm_projector_device)
+
+    # Apply mm_projector on the image features
     image_features = self.get_model().mm_projector(image_features)
+
     return image_features
 
 def override(
@@ -801,11 +806,14 @@ def override(
             position_ids = torch.sum(attention_mask, dim=1).unsqueeze(-1) - 1
         return input_ids, position_ids, attention_mask, past_key_values, None, labels
 
+    # Handling images and feature extraction
     if images.ndim == 5:
         # n_env x 2 x 3 x 384 x 384 -> 4 x 3 x 384 x 384
         concat_images = torch.cat([image.to(images_device) for image in images], dim=0)
+        logging.info('concat_images device: ' + str(concat_images.device))
+        logging.info('self.device: ' + str(self.device))
 
-        image_features = self.encode_images(concat_images).to(images_device) # Align to the same device as text inputs
+        image_features = self.encode_images(concat_images)
 
         split_sizes = [image.shape[0] for image in images]
         # list of n_env, each one's embedding is 2x729x 2560 (RGB Embedding and Depth Embedding)
