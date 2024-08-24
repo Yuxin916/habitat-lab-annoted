@@ -757,18 +757,18 @@ def override(
     if images.ndim == 5:
         # n_env x 2 x 3 x 384 x 384 -> 4 x 3 x 384 x 384
         concat_images = torch.cat([image for image in images], dim=0)
-        try:
-            image_features = self.encode_images(concat_images).to(self.device)
-        except Exception as e:
-            logging.info(f"Error: {e}")
-            # log concat_images devices
-            logging.info('concat_images device:'+str(concat_images.device))
-            logging.info('input_ids device:'+str(input_ids.device))
-            logging.info('self.device:' + str(self.device))
-            logging.info('concat_images device:' + str(concat_images.device))
-            logging.info('get model device:' + str(self.get_model().device))
-            logging.info('vision tower device' + str(
-                self.get_model().get_vision_tower().device))
+        # try:
+        image_features = self.encode_images(concat_images).to(self.device)
+        # except Exception as e:
+        #     logging.info(f"Error: {e}")
+        #     # log concat_images devices
+        #     logging.info('concat_images device:'+str(concat_images.device))
+        #     logging.info('input_ids device:'+str(input_ids.device))
+        #     logging.info('self.device:' + str(self.device))
+        #     logging.info('concat_images device:' + str(concat_images.device))
+        #     logging.info('get model device:' + str(self.get_model().device))
+        #     logging.info('vision tower device:' + str(
+        #         self.get_model().get_vision_tower().device))
 
         split_sizes = [image.shape[0] for image in images]
         # list of n_env, each one's embedding is 2x729x 2560 (RGB Embedding and Depth Embedding)
@@ -841,15 +841,15 @@ def override(
             cur_labels_noim.append(cur_labels[image_token_indices[i] + 1:
                                               image_token_indices[i + 1]])
         split_sizes = [x.shape[0] for x in cur_labels_noim]
-        try:
-            cur_input_embeds = self.get_model().embed_tokens(
-                torch.cat(cur_input_ids_noim).to(self.device)
-            )
-        except Exception as e:
-            # device
-            logging.info('self.device:' + str(self.device))
-            logging.info('torch.cat(cur_input_ids_noim) device:' + str(torch.cat(cur_input_ids_noim).device))
-            # logging.info('cur_input_embeds device:' + str(cur_input_embeds.device))
+        # try:
+        cur_input_embeds = self.get_model().embed_tokens(
+            torch.cat(cur_input_ids_noim).to(self.device)
+        )
+        # except Exception as e:
+        #     # device
+        #     logging.info('self.device:' + str(self.device))
+        #     logging.info('torch.cat(cur_input_ids_noim) device:' + str(torch.cat(cur_input_ids_noim).device))
+        #     # logging.info('cur_input_embeds device:' + str(cur_input_embeds.device))
         cur_input_embeds_no_im = torch.split(cur_input_embeds, split_sizes,
                                              dim=0)
         cur_new_input_embeds = []
@@ -875,12 +875,9 @@ def override(
         cur_image_idx = 0
 
     # Truncate sequences to max length as image embeddings can make the sequence longer
-    tokenizer_model_max_length = getattr(self.config,
-                                         'tokenizer_model_max_length',
-                                         None)
+    tokenizer_model_max_length = getattr(self.config, 'tokenizer_model_max_length', None)
     if tokenizer_model_max_length is not None:
-        new_input_embeds = [x[:tokenizer_model_max_length] for x in
-                            new_input_embeds]
+        new_input_embeds = [x[:tokenizer_model_max_length] for x in new_input_embeds]
         new_labels = [x[:tokenizer_model_max_length] for x in new_labels]
 
     # Combine them
@@ -888,46 +885,35 @@ def override(
     batch_size = len(new_input_embeds)
 
     new_input_embeds_padded = []
-    new_labels_padded = torch.full((batch_size, max_len), IGNORE_INDEX,
-                                   dtype=new_labels[0].dtype,
-                                   device=new_labels[0].device)
-    attention_mask = torch.zeros((batch_size, max_len),
-                                 dtype=attention_mask.dtype,
-                                 device=attention_mask.device)
-    position_ids = torch.zeros((batch_size, max_len),
-                               dtype=position_ids.dtype,
-                               device=position_ids.device)
+    new_labels_padded = torch.full((batch_size, max_len), IGNORE_INDEX, dtype=new_labels[0].dtype,
+                                device=new_labels[0].device)
+    attention_mask = torch.zeros((batch_size, max_len), dtype=attention_mask.dtype, device=attention_mask.device)
+    position_ids = torch.zeros((batch_size, max_len), dtype=position_ids.dtype, device=position_ids.device)
 
-    for i, (cur_new_embed, cur_new_labels) in enumerate(
-        zip(new_input_embeds, new_labels)):
+    for i, (cur_new_embed, cur_new_labels) in enumerate(zip(new_input_embeds, new_labels)):
         cur_len = cur_new_embed.shape[0]
-        if getattr(self.config, 'tokenizer_padding_side',
-                   'right') == "left":
+        if getattr(self.config, 'tokenizer_padding_side', 'right') == "left":
             new_input_embeds_padded.append(torch.cat((
-                torch.zeros((max_len - cur_len, cur_new_embed.shape[1]),
-                            dtype=cur_new_embed.dtype,
+                torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=cur_new_embed.dtype,
                             device=cur_new_embed.device),
                 cur_new_embed
             ), dim=0))
             if cur_len > 0:
                 new_labels_padded[i, -cur_len:] = cur_new_labels
                 attention_mask[i, -cur_len:] = True
-                position_ids[i, -cur_len:] = torch.arange(0, cur_len,
-                                                          dtype=position_ids.dtype,
-                                                          device=position_ids.device)
+                position_ids[i, -cur_len:] = torch.arange(0, cur_len, dtype=position_ids.dtype,
+                                                        device=position_ids.device)
         else:
             new_input_embeds_padded.append(torch.cat((
                 cur_new_embed,
-                torch.zeros((max_len - cur_len, cur_new_embed.shape[1]),
-                            dtype=cur_new_embed.dtype,
+                torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=cur_new_embed.dtype,
                             device=cur_new_embed.device)
             ), dim=0))
             if cur_len > 0:
                 new_labels_padded[i, :cur_len] = cur_new_labels
                 attention_mask[i, :cur_len] = True
-                position_ids[i, :cur_len] = torch.arange(0, cur_len,
-                                                         dtype=position_ids.dtype,
-                                                         device=position_ids.device)
+                position_ids[i, :cur_len] = torch.arange(0, cur_len, dtype=position_ids.dtype,
+                                                        device=position_ids.device)
 
     new_input_embeds = torch.stack(new_input_embeds_padded, dim=0)
 
