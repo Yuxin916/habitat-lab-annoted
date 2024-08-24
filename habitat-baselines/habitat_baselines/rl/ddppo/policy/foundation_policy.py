@@ -735,10 +735,10 @@ def override(
     # images: 2 x 2 x 3 x 384 x 384
     # rest all are None
     vision_tower = self.get_vision_tower()
-    images = images.to(self.device)
-    input_ids = input_ids.to(self.device)
-    position_ids = position_ids.to(self.device)
-    attention_mask = attention_mask.to(self.device)
+    images = images.to(self.device) if images is not None else None
+    input_ids = input_ids.to(self.device) if input_ids is not None else None
+    position_ids = position_ids.to(self.device) if position_ids is not None else None
+    attention_mask = attention_mask.to(self.device) if attention_mask is not None else None
     labels = labels.to(self.device) if labels is not None else None
 
     if vision_tower is None or images is None or input_ids.shape[1] == 1:
