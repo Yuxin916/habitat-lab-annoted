@@ -460,8 +460,10 @@ class SpatialVLMEncoder(nn.Module):
             logging.info(f"Backbone size: {self.backbone_size}")
 
             # Override the function in the backbone model
-            self.backbone.encode_images = override_encode_images.__get__(self.backbone)
-            self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(self.backbone)
+            self.backbone.encode_images = override_encode_images.__get__(
+                self.backbone)
+            self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(
+                self.backbone)
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
@@ -729,8 +731,19 @@ class SpatialVLMEncoder(nn.Module):
         plt.show()
 
 def override_encode_images(self, images):
-    # Get image features from the vision tower
-    image_features = self.get_model().get_vision_tower()(images)
+    """
+    Override method to encode images in the backbone model.
+    This function assumes it is being called within the context of the backbone model.
+    """
+    # Get the vision tower, assuming it is already correctly attached to `self` (i.e., self is self.backbone)
+    vision_tower = self.get_vision_tower()
+
+    # Ensure images are on the same device as the vision tower
+    vision_tower_device = next(vision_tower.parameters()).device
+    images = images.to(vision_tower_device)
+
+    # Encode images using the vision tower
+    image_features = vision_tower(images)
 
     # Determine the device of mm_projector
     mm_projector_device = next(self.get_model().mm_projector.parameters()).device
@@ -742,6 +755,7 @@ def override_encode_images(self, images):
     image_features = self.get_model().mm_projector(image_features)
 
     return image_features
+
 
 def override(
     self, input_ids, position_ids, attention_mask, past_key_values, labels, images
@@ -770,20 +784,21 @@ def override(
 
     # Ensure images are on the same device as the vision tower
     if images is not None:
-        images_device = next(vision_tower.parameters()).device
-        images = images.to(images_device)
+        vision_tower_device = next(vision_tower.parameters()).device
+        if images_device != vision_tower_device:
+            images = images.to(vision_tower_device)
 
     # Determine the device of the embed_tokens layer
     embed_tokens_device = next(self.get_model().embed_tokens.parameters()).device
 
     # Ensure all input tensors are on the same device as the embed_tokens layer
-    if input_ids is not None:
+    if input_ids is not None and input_ids_device != embed_tokens_device:
         input_ids = input_ids.to(embed_tokens_device)
-    if position_ids is not None:
+    if position_ids is not None and position_ids_device != embed_tokens_device:
         position_ids = position_ids.to(embed_tokens_device)
-    if attention_mask is not None:
+    if attention_mask is not None and attention_mask_device != embed_tokens_device:
         attention_mask = attention_mask.to(embed_tokens_device)
-    if labels is not None:
+    if labels is not None and labels_device != embed_tokens_device:
         labels = labels.to(embed_tokens_device)
 
     # Check for conditions for auto-regressive generation
@@ -809,7 +824,7 @@ def override(
     # Handling images and feature extraction
     if images.ndim == 5:
         # n_env x 2 x 3 x 384 x 384 -> 4 x 3 x 384 x 384
-        concat_images = torch.cat([image.to(images_device) for image in images], dim=0)
+        concat_images = torch.cat([image.to(vision_tower_device) for image in images], dim=0)
         logging.info('concat_images device: ' + str(concat_images.device))
         logging.info('self.device: ' + str(self.device))
 
@@ -821,7 +836,7 @@ def override(
         # list of n_env, each one's embedding is 1458 x 2560 (RGB Embedding and Depth Embedding)
         # image_features = [x.to(self.device) for x in image_features]
     else:
-        image_features = self.encode_images(images).to(images_device)
+        image_features = self.encode_images(images)
 
     # Let's just add dummy tensors if they do not exist,
     # it is a headache to deal with None all the time.
