@@ -50,6 +50,9 @@ from habitat_baselines.rl.ppo import Net, NetPolicy
 from habitat_baselines.utils.common import get_num_actions
 from habitat.utils.constant import category_to_id, parse_tensor_value
 
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 """
 Download Dataset:
     huggingface-cli download google/siglip-so400m-patch14-384 --local-dir spatial_bot_test/siglip --local-dir-use-symlinks False
@@ -444,7 +447,7 @@ class SpatialVLMEncoder(nn.Module):
             self.backbone = AutoModelForCausalLM.from_pretrained(
                 model_name,  # path to huggingface download
                 torch_dtype=torch.float16,  # float32 for cpu
-                device_map='auto',
+                device_map='balanced_low_0',
                 trust_remote_code=True).to(torch.float16).eval()
             # load vision tower weights
             self.vision_tower = self.backbone.get_vision_tower()
@@ -692,6 +695,7 @@ class SpatialVLMEncoder(nn.Module):
                 output_hidden_states=True,
                 return_dict_in_generate=True,
                 use_cache=True,
+                repetition_penalty=1.0
                 # output_attentions=True
             )
             logging.info(f"Time taken: {time.time() - start_time:.2f}s")
