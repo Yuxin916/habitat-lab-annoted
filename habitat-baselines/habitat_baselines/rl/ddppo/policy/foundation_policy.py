@@ -841,8 +841,15 @@ def override(
             cur_labels_noim.append(cur_labels[image_token_indices[i] + 1:
                                               image_token_indices[i + 1]])
         split_sizes = [x.shape[0] for x in cur_labels_noim]
-        cur_input_embeds = self.get_model().embed_tokens(
-            torch.cat(cur_input_ids_noim))
+        try:
+            cur_input_embeds = self.get_model().embed_tokens(
+                torch.cat(cur_input_ids_noim).to(self.device)
+            )
+        except Exception as e:
+            # device
+            logging.info('self.device:' + str(self.device))
+            logging.info('cur_input_embeds device:' + str(cur_input_embeds.device))
+            logging.info('torch.cat(cur_input_ids_noim) device:' + str(torch.cat(cur_input_ids_noim).device))
         cur_input_embeds_no_im = torch.split(cur_input_embeds, split_sizes,
                                              dim=0)
         cur_new_input_embeds = []
