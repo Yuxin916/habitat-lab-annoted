@@ -460,6 +460,7 @@ class SpatialVLMEncoder(nn.Module):
             logging.info(f"Backbone size: {self.backbone_size}")
 
             # Override the function in the backbone model
+            self.backbone.encode_images = override_encode_images.__get__(self.backbone)
             self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(self.backbone)
 
             self.tokenizer = AutoTokenizer.from_pretrained(
@@ -726,6 +727,16 @@ class SpatialVLMEncoder(nn.Module):
         plt.tight_layout()
 
         plt.show()
+
+def override_encode_images(self, images):
+    image_features = self.get_model().get_vision_tower()(images)
+    # Determine the device of mm_projector
+    mm_projector_device = next(self.get_model().mm_projector.parameters()).device
+
+    # Ensure image_features are on the same device as mm_projector
+    image_features = image_features.to(mm_projector_device)
+    image_features = self.get_model().mm_projector(image_features)
+    return image_features
 
 def override(
     self, input_ids, position_ids, attention_mask, past_key_values, labels, images
