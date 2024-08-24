@@ -51,10 +51,10 @@ if TYPE_CHECKING:
 cv2 = try_cv2_import()
 
 
-if hasattr(torch, "inference_mode"):
-    inference_mode = torch.inference_mode
-else:
-    inference_mode = torch.no_grad
+# if hasattr(torch, "inference_mode"):
+#     inference_mode = torch.inference_mode
+# else:
+inference_mode = torch.no_grad
 
 
 def cosine_decay(progress: float) -> float:
