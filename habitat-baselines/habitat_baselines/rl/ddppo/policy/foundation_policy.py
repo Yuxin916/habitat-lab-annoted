@@ -757,6 +757,19 @@ def override(
         images_device = next(vision_tower.parameters()).device
         images = images.to(images_device)
 
+    # Determine the device of the embed_tokens layer
+    embed_tokens_device = next(self.get_model().embed_tokens.parameters()).device
+
+    # Ensure all input tensors are on the same device as the embed_tokens layer
+    if input_ids is not None:
+        input_ids = input_ids.to(embed_tokens_device)
+    if position_ids is not None:
+        position_ids = position_ids.to(embed_tokens_device)
+    if attention_mask is not None:
+        attention_mask = attention_mask.to(embed_tokens_device)
+    if labels is not None:
+        labels = labels.to(embed_tokens_device)
+
     # Check for conditions for auto-regressive generation
     if vision_tower is None or images is None or input_ids.shape[1] == 1:
         # auto-regressive generation, input_ids is a single token
@@ -849,7 +862,11 @@ def override(
             cur_labels_noim.append(cur_labels[image_token_indices[i] + 1:image_token_indices[i + 1]])
 
         split_sizes = [x.shape[0] for x in cur_labels_noim]
-        cur_input_embeds = self.get_model().embed_tokens(torch.cat(cur_input_ids_noim))
+
+        # Make sure all tensors are on the correct device
+        cur_input_embeds = self.get_model().embed_tokens(
+            torch.cat(cur_input_ids_noim).to(embed_tokens_device)
+        )
         cur_input_embeds_no_im = torch.split(cur_input_embeds, split_sizes, dim=0)
 
         cur_new_input_embeds = []
