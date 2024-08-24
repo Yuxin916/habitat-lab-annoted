@@ -257,7 +257,8 @@ class PPO(nn.Module, Updater):
         self.optimizer.step()
         self.after_step()
 
-        with inference_mode():
+        # with inference_mode():
+        with torch.no_grad():
             if "is_coeffs" in batch:
                 record_min_mean_max(batch["is_coeffs"], "ver_is_coeffs")
             record_min_mean_max(orig_values, "value_pred")
@@ -326,7 +327,8 @@ class PPO(nn.Module, Updater):
 
         self._set_grads_to_none()
 
-        with inference_mode():
+        # with inference_mode():
+        with torch.no_grad():
             return {
                 k: float(
                     torch.stack(
