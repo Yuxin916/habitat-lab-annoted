@@ -457,6 +457,7 @@ class SpatialVLMEncoder(nn.Module):
             self.backbone_size = sum(p.numel() for p in self.backbone.parameters())
             logging.info(f"Backbone size: {self.backbone_size}")
 
+            self.backbone.encode_images = override_encode_images.__get__(self.backbone)
             self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(self.backbone)
 
             self.tokenizer = AutoTokenizer.from_pretrained(
@@ -724,6 +725,13 @@ class SpatialVLMEncoder(nn.Module):
 
         plt.show()
 
+def override_encode_images(self, images):
+    logging.info('self. device:' + str(self.device))
+    image_features = self.get_model().get_vision_tower()(images)
+    logging.info('image_features device:' + str(image_features.device))
+    image_features = self.get_model().mm_projector(image_features)
+    logging.info('image_features device:' + str(image_features.device))
+    return image_features
 
 def override(
     self, input_ids, position_ids, attention_mask, past_key_values, labels,
@@ -758,6 +766,9 @@ def override(
         # n_env x 2 x 3 x 384 x 384 -> 4 x 3 x 384 x 384
         concat_images = torch.cat([image for image in images], dim=0)
         # try:
+        logging.info('concat_images device:' + str(concat_images.device))
+        logging.info('self.device:' + str(self.device))
+
         image_features = self.encode_images(concat_images).to(self.device)
         # except Exception as e:
         #     logging.info(f"Error: {e}")
