@@ -736,6 +736,11 @@ def override(
     # rest all are None
     vision_tower = self.get_vision_tower()
     images = images.to(self.device)
+    input_ids = input_ids.to(self.device)
+    position_ids = position_ids.to(self.device)
+    attention_mask = attention_mask.to(self.device)
+    labels = labels.to(self.device) if labels is not None else None
+
     if vision_tower is None or images is None or input_ids.shape[1] == 1:
         # auto-regressive generation, input_ids is a single token
         if past_key_values is not None and vision_tower is not None and images is not None and input_ids.shape[
