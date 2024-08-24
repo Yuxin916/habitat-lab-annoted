@@ -751,6 +751,11 @@ def override(
     if images.ndim == 5:
         # n_env x 2 x 3 x 384 x 384 -> 4 x 3 x 384 x 384
         concat_images = torch.cat([image for image in images], dim=0)
+        logging.info('self.device:'+str(self.device))
+        logging.info('concat_images device:'+str(concat_images.device))
+        logging.info('get model device:'+str(self.get_model().device))
+        logging.info('vision tower device' + str(self.get_model().get_vision_tower().device))
+
         image_features = self.encode_images(concat_images).to(self.device)
         split_sizes = [image.shape[0] for image in images]
         # list of n_env, each one's embedding is 2x729x 2560 (RGB Embedding and Depth Embedding)
