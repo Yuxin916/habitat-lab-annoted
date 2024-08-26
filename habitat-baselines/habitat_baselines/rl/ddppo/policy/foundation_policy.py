@@ -8,7 +8,6 @@ import time
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 import os
-import logging
 import numpy as np
 import torch
 from gym import spaces
@@ -74,7 +73,7 @@ except ImportError:
 
 IMAGE_TOKEN_INDEX = [-201, -202]
 IGNORE_INDEX = -100
-choose_prompt = False
+choose_prompt = True
 
 @baseline_registry.register_policy
 class SpatialBotPolicy(NetPolicy):
@@ -481,7 +480,7 @@ class SpatialVLMEncoder(nn.Module):
     def is_blind(self):
         return self._n_input_channels == 0
 
-    def pre_process_image(self, image):
+    def pre_process_rgb_image(self, image):
         """
         normalize a batch of RGB / Depth images such that each image in the batch
         - Calculate the minimum and maximum values for each RGB image in the batch.
@@ -505,19 +504,77 @@ class SpatialVLMEncoder(nn.Module):
         image_rescaled = (image_normalized * 255).clamp(0, 255).to(
             torch.uint8)
 
-        if C == 1:
-            # Repeat the single-channel depth image to make it a three-channel image
-            image_rescaled = image_rescaled.repeat(1, 3, 1, 1)
-
         # transform to RGBA model PIL image list
         to_pil = transforms.ToPILImage()
         pil_images = [
-            to_pil(image_rescaled[i]).convert('RGBA') for i in range(B)
+            to_pil(image_rescaled[i]).convert('RGB') for i in range(B)
         ]
 
         # Optional: Display or save the images
         # for i, image in enumerate(pil_images):
         #     image.show()  # Display the image
+
+        return pil_images
+
+    def pre_process_depth_image(self, depth_image):
+        # Assuming depth_image is a numpy array with shape (batch_size, 1, 480, 640)
+        batch_size, C, height, width = depth_image.shape
+
+        # Reshape to (batch_size, 480, 640) for easier manipulation
+        depth_image = depth_image.view(batch_size, height, width)
+
+        # Normalize depth values to [0, 1]
+        min_depth = depth_image.min()
+        max_depth = depth_image.max()
+        normalized_depth = (depth_image - min_depth) / (max_depth - min_depth)
+
+        # Initialize a list to hold the PIL images
+        pil_images = []
+
+        # Loop through each tensor in the batch
+        for i in range(batch_size):
+            # Rescaling to uint16 range
+            depth_image = (
+                    normalized_depth[i] * 65535).short()  # Convert to int16 to fit into uint16 range
+            assert depth_image.ndim == 2, "Depth must be 2D"
+
+            # Convert to numpy
+            depth_array = depth_image.cpu().numpy().astype('uint16')
+
+            # Create PIL Image
+            pil_image = Image.fromarray(depth_array,
+                                        mode='I;16')  # 'I;16' mode for 16-bit grayscale images
+
+            assert len(pil_image.getbands()) == 1, "Depth image must be single-channel"
+
+            # To visualize the depth image, you can use the following code:
+            # import matplotlib.pyplot as plt
+            # import matplotlib.colors as mcolors
+            # # Convert PIL Image to numpy array
+            # depth_array = np.array(pil_image)
+            # # Normalize the image to the range [0, 1]
+            # normalized_image = depth_array / np.max(depth_array)
+            # # Display the image with a colormap
+            # plt.figure(figsize=(10, 5))
+            # plt.imshow(normalized_image,
+            #            cmap='viridis')  # 'viridis' is a good colormap for depth data
+            # plt.colorbar(label='Normalized Depth')
+            # plt.title('Depth Image Visualization')
+            # plt.axis('off')  # Turn off axis numbers and ticks
+            # plt.show()
+
+            if len(pil_image.getbands()) == 1:
+                img = np.array(pil_image)
+                height, width = img.shape
+                three_channel_array = np.zeros((height, width, 3),
+                                               dtype=np.uint8)
+                three_channel_array[:, :, 0] = (img // 1024) * 4
+                three_channel_array[:, :, 1] = (img // 32) * 8
+                three_channel_array[:, :, 2] = (img % 32) * 8
+                image2 = Image.fromarray(three_channel_array, 'RGB')
+
+            # Append the PIL image to the list
+            pil_images.append(image2)
 
         return pil_images
 
@@ -527,12 +584,19 @@ class SpatialVLMEncoder(nn.Module):
         str_compass = parse_tensor_value(observations['compass'])
         robot_position = f"GPS: {str_gps}  Compass: {str_compass}"
 
-        # prompt_template = """Find the {GOAL_NAME}. List objects that the goal object is typically found near to."""
-        # prompt_template = """
-        # "Ignore wall, floor, ceiling, and window. "
-        # List all objects detected and describe their relation to '{GOAL_NAME}' in home scene.
-        # """
-        prompt_template = """What object is in the image?"""
+        # prompt_template = "Find the {GOAL_NAME}. Your relative position relative to the start point is {ROBOT_POSITION}."
+        # prompt_template = """Find the {GOAL_NAME}. If the target object is not visible, desribe the current objects spatial relationship."""
+        # prompt_template = """Ignore wall, floor, ceiling, and window. List all objects detected and describe their spatial relationship related to '{GOAL_NAME}' in home scene."""
+        # prompt_template = """What object is in the image?"""
+        # prompt_template = ("Describe the objects in a home scene and their spatial relationships, "
+        #                    "excluding any structural elements like walls, windows, or ceilings. "
+        #                    "Provide your description in a numerical list, indicating how each item is "
+        #                    "positioned relative to others using terms like 'to the left of,' 'to the right of,' "
+        #                    "'above,' 'below,' 'in front of,' and 'behind.'")
+        prompt_template = ("Describe the spatial relationships between movable objects in a home scene, "
+                           "avoiding any mention of structural elements like walls, windows, or ceilings. "
+                           "List each object and describe its position relative to other objects in a clear, "
+                           "numerical format. Use the structure 'object - To the relation of the object' for each entry.")
         prompt = prompt_template.format(GOAL_NAME=category_to_id[goal_name[0]],
                                         ROBOT_POSITION=robot_position)
         return prompt
@@ -583,7 +647,7 @@ class SpatialVLMEncoder(nn.Module):
                 {key: value[i] for key, value in observations.items()})
             for i in range(batch_size)
         ]
-        # logging.info('Prompts:' + str(prompts))
+        logging.info('Prompts:' + str(prompts))
 
         texts = [
             (
@@ -643,8 +707,8 @@ class SpatialVLMEncoder(nn.Module):
         n_env = rgb_image.size(0)
 
         # Pre-process the images
-        rgb_pil_images = self.pre_process_image(rgb_image)
-        depth_pil_images = self.pre_process_image(depth_image)
+        rgb_pil_images = self.pre_process_rgb_image(rgb_image)
+        depth_pil_images = self.pre_process_depth_image(depth_image)
 
         # (rgb_batch(n_env) + rgb_batch(n_env)) x channel x height x width
         # first time need to load the visual encoder weights
@@ -697,11 +761,12 @@ class SpatialVLMEncoder(nn.Module):
             outputs = self.backbone.generate(
                 padded_input_ids_batch, # n_env x input_length
                 images=processed_images,  # n_env x 2 x 3 x 384 x 384
-                max_new_tokens=100,
+                max_new_tokens=150,
                 output_hidden_states=True,
                 return_dict_in_generate=True,
                 use_cache=True,
-                repetition_penalty=1.0
+                repetition_penalty=1.0,
+                temperature=0,
                 # output_attentions=True
             )
             logging.info(f"Time taken: {time.time() - start_time:.2f}s")
@@ -714,6 +779,12 @@ class SpatialVLMEncoder(nn.Module):
                 generated_sequences[:, padded_input_ids_batch.shape[1]:],
                 skip_special_tokens=True):
                 logging.info(ans.strip())
+
+        # Apply sigmoid activation
+        sigmoid_output = torch.sigmoid(max_pooled_hidden_state)
+        # Reduce by taking the mean along the last dimension to get (batch, 1, 1)
+        reduced_output = torch.mean(sigmoid_output, dim=2, keepdim=True).squeeze()
+        logging.info('sigmoid_output: ' + str(reduced_output))
 
         return max_pooled_hidden_state
 
@@ -738,23 +809,23 @@ def override_encode_images(self, images):
     # Get the vision tower and its device
     vision_tower = self.get_vision_tower()
     vision_tower_device = next(vision_tower.parameters()).device
-    logging.info(f"vision_tower_device: {vision_tower_device}")
+    # logging.info(f"vision_tower_device: {vision_tower_device}")
 
     # Move images to the vision tower's device
     images = images.to(vision_tower_device)
-    logging.info(f"Images moved to device: {images.device}")
+    # logging.info(f"Images moved to device: {images.device}")
 
     # Encode images using the vision tower
     image_features = vision_tower(images)
-    logging.info(f"Image features device after vision tower: {image_features.device}")
+    # logging.info(f"Image features device after vision tower: {image_features.device}")
 
     # Determine the device of mm_projector
     mm_projector_device = next(self.get_model().mm_projector.parameters()).device
-    logging.info(f"mm_projector_device: {mm_projector_device}")
+    # logging.info(f"mm_projector_device: {mm_projector_device}")
 
     # Move image_features to the mm_projector's device
     image_features = image_features.to(mm_projector_device)
-    logging.info(f"Image features moved to mm_projector device: {image_features.device}")
+    # logging.info(f"Image features moved to mm_projector device: {image_features.device}")
 
     # Apply mm_projector on the image features
     image_features = self.get_model().mm_projector(image_features)
