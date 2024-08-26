@@ -450,6 +450,7 @@ class SpatialVLMEncoder(nn.Module):
                 self.vision_tower_device = torch.device('cpu')  # Fallback to CPU if no GPUs are available
 
             # load vision tower weights
+            self.vision_tower = self.backbone.get_vision_tower().to(self.vision_tower_device)
             if not self.vision_tower.is_loaded:
                 self.vision_tower.load_model()
             self.vision_tower = self.backbone.get_vision_tower().to(self.vision_tower_device)
@@ -696,6 +697,8 @@ class SpatialVLMEncoder(nn.Module):
     def forward(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:  # type: ignore
 
         self.backbone.eval()
+        assert self.vision_tower_device == self.backbone.get_vision_tower().device, "Vision tower device mismatch"
+        logging.info('observations device: ' + str(observations.device))
 
         if self.is_blind:
             return None
