@@ -698,7 +698,6 @@ class SpatialVLMEncoder(nn.Module):
 
         self.backbone.eval()
         assert self.vision_tower_device == self.backbone.get_vision_tower().device, "Vision tower device mismatch"
-        logging.info('observations device: ' + str(observations.device))
 
         if self.is_blind:
             return None
