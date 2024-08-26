@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import logging
 # Copyright (c) Meta Platforms, Inc. and its affiliates.
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -131,6 +131,7 @@ class DecentralizedDistributedMixin:
                         output_device=device,
                         find_unused_parameters=find_unused_params,
                     )
+                    logging.info("Using DistributedDataParallel")
                 else:
                     self.ddp = torch.nn.parallel.DistributedDataParallel(  # type: ignore
                         model,

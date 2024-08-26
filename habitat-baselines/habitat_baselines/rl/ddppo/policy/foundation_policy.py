@@ -456,8 +456,8 @@ class SpatialVLMEncoder(nn.Module):
             self.vision_tower = self.backbone.get_vision_tower().to(self.backbone.device)
 
             # Override the function in the backbone model
-            self.backbone.encode_images = override_encode_images.__get__(
-                self.backbone)
+            # self.backbone.encode_images = override_encode_images.__get__(
+            #     self.backbone)
             self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(
                 self.backbone)
 
@@ -466,8 +466,8 @@ class SpatialVLMEncoder(nn.Module):
             # logging.info(f"Backbone size: {self.backbone_size}")
 
             # check each layer's device
-            for name, param in self.backbone.named_parameters():
-                logging.info(f"Parameter: {name} is on device: {param.device}")
+            # for name, param in self.backbone.named_parameters():
+            #     logging.info(f"Parameter: {name} is on device: {param.device}")
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
@@ -698,7 +698,7 @@ class SpatialVLMEncoder(nn.Module):
 
         self.backbone.eval()
         # get current rank
-        logging.info(f"vision tower device at the begining of forward loop: {str(self.backbone.get_vision_tower().device)}")
+        # logging.info(f"vision tower device at the begining of forward loop: {str(self.backbone.get_vision_tower().device)}")
 
         if self.is_blind:
             return None
@@ -796,7 +796,7 @@ class SpatialVLMEncoder(nn.Module):
                 temperature=0,
                 # output_attentions=True
             )
-            logging.info(f"Time taken: {time.time() - start_time:.2f}s")
+            logging.info(f"Time taken for generation: {time.time() - start_time:.2f}s")
             # The generated sequences
             generated_sequences = outputs.sequences
 
