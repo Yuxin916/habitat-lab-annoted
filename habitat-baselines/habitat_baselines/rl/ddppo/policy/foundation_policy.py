@@ -448,13 +448,28 @@ class SpatialVLMEncoder(nn.Module):
                 torch_dtype=torch.float16,  # float32 for cpu
                 device_map='auto',
                 trust_remote_code=True).to(torch.float16).eval()
+            last_gpu_index = torch.cuda.device_count() - 1
+            # Check if there are any GPUs available
+            if last_gpu_index >= 0:
+                self.vision_tower_device = torch.device(f'cuda:{last_gpu_index}')
+            else:
+                self.vision_tower_device = torch.device('cpu')  # Fallback to CPU if no GPUs are available
             # load vision tower weights
-            self.vision_tower = self.backbone.get_vision_tower()
+            self.vision_tower = self.backbone.get_vision_tower().to(self.vision_tower_device)
             if not self.vision_tower.is_loaded:
                 self.vision_tower.load_model()
+
+            # Override the function in the backbone model
+            self.backbone.encode_images = override_encode_images.__get__(
+                self.backbone)
+            self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(
+                self.backbone)
+
             # get self.backbone parameter size
             self.backbone_size = sum(p.numel() for p in self.backbone.parameters())
             logging.info(f"Backbone size: {self.backbone_size}")
+
+            # check each layer's device
             for name, param in self.backbone.named_parameters():
                 logging.info(f"Parameter: {name} is on device: {param.device}")
 
@@ -685,12 +700,6 @@ class SpatialVLMEncoder(nn.Module):
 
     def forward(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:  # type: ignore
 
-        # Override the function in the backbone model
-        self.backbone.encode_images = override_encode_images.__get__(
-            self.backbone)
-        self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(
-            self.backbone)
-
         self.backbone.eval()
 
         if self.is_blind:
@@ -715,8 +724,12 @@ class SpatialVLMEncoder(nn.Module):
         processed_images = self.backbone.process_images(
             # element by element concatenation
             [val for pair in zip(rgb_pil_images, depth_pil_images) for val in pair],
-            self.backbone.config).to(dtype=self.backbone.dtype, device=self.backbone.device).view(n_env, 2, 3, 384, 384)
-        self.backbone.get_vision_tower().to(self.backbone.device)
+            self.backbone.config).to(dtype=self.backbone.dtype,
+                                     device=self.backbone.device).view(n_env, 2, 3, 384, 384)
+
+        self.backbone.get_vision_tower().to(self.vision_tower_device)
+
+
 
         # visualize the pre-processed images
         # self.visualize_tensor_preprocess(processed_images)
@@ -744,6 +757,13 @@ class SpatialVLMEncoder(nn.Module):
         # return torch.stack(hidden_states).squeeze(1)
         """for loop inference"""
 
+        logging.info('-------Inference----------')
+        # check each layer's device
+        for name, param in self.backbone.named_parameters():
+            logging.info(f"Parameter: {name} is on device: {param.device}")
+        logging.info('padded_input_ids_batch device: ' + str(padded_input_ids_batch.device))
+        logging.info('processed_images device: ' + str(processed_images.device))
+
         # start_time = time.time()
         last_hidden_layer = self.backbone(
             padded_input_ids_batch,  # n_env x input_length
@@ -752,6 +772,7 @@ class SpatialVLMEncoder(nn.Module):
             use_cache=True,
         ).hidden_states[-1]  # Final layer hidden states
         # logging.info(f"Time taken for forward pass: {time.time() - start_time:.2f}s")
+        logging.info('-------Inference----------')
 
         max_pooled_hidden_state = F.max_pool1d(last_hidden_layer.permute(0, 2, 1),
                                                kernel_size=last_hidden_layer.size(1)).permute(0, 2, 1)
