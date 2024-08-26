@@ -360,7 +360,7 @@ class ObjectNavSpatialNet(Net):
 
             # visual_feats = self.test(visual_feats.unsqueeze(1)).view(
             #     visual_feats.size(0), -1)
-            visual_feats = self.adapter(visual_feats.squeeze(1))
+            visual_feats = self.adapter(visual_feats.squeeze(1).to(torch.float16))
             aux_loss_state["perception_embed"] = visual_feats
             x.append(visual_feats)
 
