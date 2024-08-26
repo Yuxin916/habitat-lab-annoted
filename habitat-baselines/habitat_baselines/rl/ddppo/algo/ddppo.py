@@ -131,7 +131,7 @@ class DecentralizedDistributedMixin:
                         output_device=device,
                         find_unused_parameters=find_unused_params,
                     )
-                    logging.info("Using DistributedDataParallel")
+                    # logging.info("Using DistributedDataParallel")
                 else:
                     self.ddp = torch.nn.parallel.DistributedDataParallel(  # type: ignore
                         model,

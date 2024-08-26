@@ -73,7 +73,7 @@ except ImportError:
 
 IMAGE_TOKEN_INDEX = [-201, -202]
 IGNORE_INDEX = -100
-choose_prompt = True
+choose_prompt = False
 
 @baseline_registry.register_policy
 class SpatialBotPolicy(NetPolicy):
@@ -301,7 +301,7 @@ class ObjectNavSpatialNet(Net):
                         hidden_size, hidden_size
                     ),
                     nn.ReLU(),
-                )
+                ).to(torch.float16)
         else:
             raise ValueError(f"Invalid backbone: {backbone}")
 
@@ -782,36 +782,31 @@ class SpatialVLMEncoder(nn.Module):
 
         max_pooled_hidden_state = F.max_pool1d(last_hidden_layer.permute(0, 2, 1),
                                                kernel_size=last_hidden_layer.size(1)).permute(0, 2, 1)
-        if choose_prompt:
-            # batch x output_id
-            start_time = time.time()
-            outputs = self.backbone.generate(
-                padded_input_ids_batch, # n_env x input_length
-                images=processed_images,  # n_env x 2 x 3 x 384 x 384
-                max_new_tokens=150,
-                output_hidden_states=True,
-                return_dict_in_generate=True,
-                use_cache=True,
-                repetition_penalty=1.0,
-                temperature=0,
-                # output_attentions=True
-            )
-            logging.info(f"Time taken for generation: {time.time() - start_time:.2f}s")
-            # The generated sequences
-            generated_sequences = outputs.sequences
 
-            # logging.info([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
-            #                                                           skip_special_tokens=True)])
-            for ans in self.tokenizer.batch_decode(
-                generated_sequences[:, padded_input_ids_batch.shape[1]:],
-                skip_special_tokens=True):
-                logging.info(ans.strip())
-
-        # Apply sigmoid activation
-        sigmoid_output = torch.sigmoid(max_pooled_hidden_state)
-        # Reduce by taking the mean along the last dimension to get (batch, 1, 1)
-        reduced_output = torch.mean(sigmoid_output, dim=2, keepdim=True).squeeze()
-        # logging.info('sigmoid_output: ' + str(reduced_output))
+        # if choose_prompt:
+        #     # batch x output_id
+        #     start_time = time.time()
+        #     outputs = self.backbone.generate(
+        #         padded_input_ids_batch, # n_env x input_length
+        #         images=processed_images,  # n_env x 2 x 3 x 384 x 384
+        #         max_new_tokens=150,
+        #         output_hidden_states=True,
+        #         return_dict_in_generate=True,
+        #         use_cache=True,
+        #         repetition_penalty=1.0,
+        #         temperature=0,
+        #         # output_attentions=True
+        #     )
+        #     logging.info(f"Time taken for generation: {time.time() - start_time:.2f}s")
+        #     # The generated sequences
+        #     generated_sequences = outputs.sequences
+        #
+        #     # logging.info([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
+        #     #                                                           skip_special_tokens=True)])
+        #     for ans in self.tokenizer.batch_decode(
+        #         generated_sequences[:, padded_input_ids_batch.shape[1]:],
+        #         skip_special_tokens=True):
+        #         logging.info(ans.strip())
 
         return max_pooled_hidden_state
 
