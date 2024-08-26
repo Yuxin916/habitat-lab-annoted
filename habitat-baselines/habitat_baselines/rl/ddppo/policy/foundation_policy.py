@@ -466,8 +466,8 @@ class SpatialVLMEncoder(nn.Module):
             # logging.info(f"Backbone size: {self.backbone_size}")
 
             # check each layer's device
-            for name, param in self.backbone.named_parameters():
-                logging.info(f"Parameter: {name} is on device: {param.device}")
+            # for name, param in self.backbone.named_parameters():
+            #     logging.info(f"Parameter: {name} is on device: {param.device}")
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
@@ -760,8 +760,8 @@ class SpatialVLMEncoder(nn.Module):
         # # check each layer's device
         # for name, param in self.backbone.named_parameters():
         #     logging.info(f"Parameter: {name} is on device: {param.device}")
-        logging.info('padded_input_ids_batch device: ' + str(padded_input_ids_batch.device))
-        logging.info('processed_images device: ' + str(processed_images.device))
+        # logging.info('padded_input_ids_batch device: ' + str(padded_input_ids_batch.device))
+        # logging.info('processed_images device: ' + str(processed_images.device))
 
         # start_time = time.time()
         last_hidden_layer = self.backbone(
@@ -771,7 +771,7 @@ class SpatialVLMEncoder(nn.Module):
             use_cache=True,
         ).hidden_states[-1]  # Final layer hidden states
         # logging.info(f"Time taken for forward pass: {time.time() - start_time:.2f}s")
-        logging.info('-------Inference----------')
+        # logging.info('-------Inference----------')
 
         max_pooled_hidden_state = F.max_pool1d(last_hidden_layer.permute(0, 2, 1),
                                                kernel_size=last_hidden_layer.size(1)).permute(0, 2, 1)
@@ -804,7 +804,7 @@ class SpatialVLMEncoder(nn.Module):
         sigmoid_output = torch.sigmoid(max_pooled_hidden_state)
         # Reduce by taking the mean along the last dimension to get (batch, 1, 1)
         reduced_output = torch.mean(sigmoid_output, dim=2, keepdim=True).squeeze()
-        logging.info('sigmoid_output: ' + str(reduced_output))
+        # logging.info('sigmoid_output: ' + str(reduced_output))
 
         return max_pooled_hidden_state
 
@@ -829,23 +829,23 @@ def override_encode_images(self, images):
     # Get the vision tower and its device
     vision_tower = self.get_vision_tower()
     vision_tower_device = next(vision_tower.parameters()).device
-    # logging.info(f"vision_tower_device: {vision_tower_device}")
+    logging.info(f"vision_tower_device: {vision_tower_device}")
 
     # Move images to the vision tower's device
     images = images.to(vision_tower_device)
-    # logging.info(f"Images moved to device: {images.device}")
+    logging.info(f"Images moved to device: {images.device}")
 
     # Encode images using the vision tower
     image_features = vision_tower(images)
-    # logging.info(f"Image features device after vision tower: {image_features.device}")
+    logging.info(f"Image features device after vision tower: {image_features.device}")
 
     # Determine the device of mm_projector
     mm_projector_device = next(self.get_model().mm_projector.parameters()).device
-    # logging.info(f"mm_projector_device: {mm_projector_device}")
+    logging.info(f"mm_projector_device: {mm_projector_device}")
 
     # Move image_features to the mm_projector's device
     image_features = image_features.to(mm_projector_device)
-    # logging.info(f"Image features moved to mm_projector device: {image_features.device}")
+    logging.info(f"Image features moved to mm_projector device: {image_features.device}")
 
     # Apply mm_projector on the image features
     image_features = self.get_model().mm_projector(image_features)
