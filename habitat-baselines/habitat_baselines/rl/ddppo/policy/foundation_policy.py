@@ -446,10 +446,8 @@ class SpatialVLMEncoder(nn.Module):
             self.backbone = AutoModelForCausalLM.from_pretrained(
                 model_name,  # path to huggingface download
                 torch_dtype=torch.float16,  # float32 for cpu
-                device_map='balanced_low_0',
+                device_map='auto',
                 trust_remote_code=True).to(torch.float16).eval()
-            # for name, param in self.backbone.named_parameters():
-            #     logging.info(f"Parameter: {name} is on device: {param.device}")
             # load vision tower weights
             self.vision_tower = self.backbone.get_vision_tower()
             if not self.vision_tower.is_loaded:
@@ -457,6 +455,8 @@ class SpatialVLMEncoder(nn.Module):
             # get self.backbone parameter size
             self.backbone_size = sum(p.numel() for p in self.backbone.parameters())
             logging.info(f"Backbone size: {self.backbone_size}")
+            for name, param in self.backbone.named_parameters():
+                logging.info(f"Parameter: {name} is on device: {param.device}")
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
