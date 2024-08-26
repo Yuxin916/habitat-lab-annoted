@@ -402,13 +402,7 @@ class ObjectNavSpatialNet(Net):
             )
         x.append(prev_actions)
 
-        try:
-            out = torch.cat(x, dim=1)
-        except Exception as e:
-            logging.info(f"Error: {e}")
-            # Handle the error by inspecting tensor shapes
-            for i, tensor in enumerate(x):
-                logging.info(f"Tensor {i} shape: {tensor.shape}")
+        out = torch.cat(x, dim=1)
         out, rnn_hidden_states = self.state_encoder(
             out, rnn_hidden_states, masks, rnn_build_seq_info
         )
@@ -454,10 +448,11 @@ class SpatialVLMEncoder(nn.Module):
                 self.vision_tower_device = torch.device(f'cuda:{last_gpu_index}')
             else:
                 self.vision_tower_device = torch.device('cpu')  # Fallback to CPU if no GPUs are available
+
             # load vision tower weights
-            self.vision_tower = self.backbone.get_vision_tower().to(self.vision_tower_device)
             if not self.vision_tower.is_loaded:
                 self.vision_tower.load_model()
+            self.vision_tower = self.backbone.get_vision_tower().to(self.vision_tower_device)
 
             # Override the function in the backbone model
             self.backbone.encode_images = override_encode_images.__get__(
@@ -467,7 +462,7 @@ class SpatialVLMEncoder(nn.Module):
 
             # get self.backbone parameter size
             self.backbone_size = sum(p.numel() for p in self.backbone.parameters())
-            logging.info(f"Backbone size: {self.backbone_size}")
+            # logging.info(f"Backbone size: {self.backbone_size}")
 
             # check each layer's device
             for name, param in self.backbone.named_parameters():
@@ -662,7 +657,7 @@ class SpatialVLMEncoder(nn.Module):
                 {key: value[i] for key, value in observations.items()})
             for i in range(batch_size)
         ]
-        logging.info('Prompts:' + str(prompts))
+        # logging.info('Prompts:' + str(prompts))
 
         texts = [
             (
@@ -757,10 +752,12 @@ class SpatialVLMEncoder(nn.Module):
         # return torch.stack(hidden_states).squeeze(1)
         """for loop inference"""
 
-        logging.info('-------Inference----------')
-        # check each layer's device
-        for name, param in self.backbone.named_parameters():
-            logging.info(f"Parameter: {name} is on device: {param.device}")
+        # # LOG which rank is running
+        # logging.info(f"Rank: {torch.distributed.get_rank()}")
+        # logging.info('-------Inference----------')
+        # # check each layer's device
+        # for name, param in self.backbone.named_parameters():
+        #     logging.info(f"Parameter: {name} is on device: {param.device}")
         logging.info('padded_input_ids_batch device: ' + str(padded_input_ids_batch.device))
         logging.info('processed_images device: ' + str(processed_images.device))
 
