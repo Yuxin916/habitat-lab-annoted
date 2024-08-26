@@ -440,20 +440,20 @@ class SpatialVLMEncoder(nn.Module):
             self.backbone = AutoModelForCausalLM.from_pretrained(
                 model_name,  # path to huggingface download
                 torch_dtype=torch.float16,  # float32 for cpu
-                device_map='auto',
+                # device_map='auto',
                 trust_remote_code=True).to(torch.float16).eval()
-            last_gpu_index = torch.cuda.device_count() - 1
+            # last_gpu_index = torch.cuda.device_count() - 1
             # Check if there are any GPUs available
-            if last_gpu_index >= 0:
-                self.vision_tower_device = torch.device(f'cuda:{last_gpu_index}')
-            else:
-                self.vision_tower_device = torch.device('cpu')  # Fallback to CPU if no GPUs are available
+            # if last_gpu_index >= 0:
+            #     self.vision_tower_device = torch.device(f'cuda:{last_gpu_index}')
+            # else:
+            #     self.vision_tower_device = torch.device('cpu')  # Fallback to CPU if no GPUs are available
 
             # load vision tower weights
-            self.vision_tower = self.backbone.get_vision_tower().to(self.vision_tower_device)
+            self.vision_tower = self.backbone.get_vision_tower().to(self.backbone.device)
             if not self.vision_tower.is_loaded:
                 self.vision_tower.load_model()
-            self.vision_tower = self.backbone.get_vision_tower().to(self.vision_tower_device)
+            self.vision_tower = self.backbone.get_vision_tower().to(self.backbone.device)
 
             # Override the function in the backbone model
             self.backbone.encode_images = override_encode_images.__get__(
@@ -466,8 +466,8 @@ class SpatialVLMEncoder(nn.Module):
             # logging.info(f"Backbone size: {self.backbone_size}")
 
             # check each layer's device
-            # for name, param in self.backbone.named_parameters():
-            #     logging.info(f"Parameter: {name} is on device: {param.device}")
+            for name, param in self.backbone.named_parameters():
+                logging.info(f"Parameter: {name} is on device: {param.device}")
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
@@ -735,9 +735,6 @@ class SpatialVLMEncoder(nn.Module):
         processed_images = processed_images.to(dtype=self.backbone.dtype,
                                                   device=self.backbone.device).view(n_env, 2, 3, 384, 384)
 
-        # get current rank
-        logging.info(f"vision tower device after process_images: {str(self.backbone.get_vision_tower().device)}")
-
         # visualize the pre-processed images
         # self.visualize_tensor_preprocess(processed_images)
 
@@ -843,7 +840,6 @@ def override_encode_images(self, images):
 
     # Move images to the vision tower's device
     images = images.to(vision_tower_device)
-    logging.info(f"Images moved to device: {images.device}")
 
     # Encode images using the vision tower
     image_features = vision_tower(images)
