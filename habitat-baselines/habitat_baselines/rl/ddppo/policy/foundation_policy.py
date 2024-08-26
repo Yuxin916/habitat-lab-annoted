@@ -697,8 +697,8 @@ class SpatialVLMEncoder(nn.Module):
     def forward(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:  # type: ignore
 
         self.backbone.eval()
-        logging.info('vision tower device: ' + str(self.vision_tower_device))
-        assert self.vision_tower_device == self.backbone.get_vision_tower().device, "Vision tower device mismatch"
+        # get current rank
+        logging.info(f"vision tower device at the begining of forward loop: {str(self.backbone.get_vision_tower().device)}")
 
         if self.is_blind:
             return None
@@ -719,14 +719,24 @@ class SpatialVLMEncoder(nn.Module):
 
         # (rgb_batch(n_env) + rgb_batch(n_env)) x channel x height x width
         # first time need to load the visual encoder weights
-        processed_images = self.backbone.process_images(
-            # element by element concatenation
-            [val for pair in zip(rgb_pil_images, depth_pil_images) for val in pair],
-            self.backbone.config).to(dtype=self.backbone.dtype,
-                                     device=self.vision_tower_device).view(n_env, 2, 3, 384, 384)
+        image_processor = self.vision_tower.image_processor
+        image_aspect_ratio = getattr(self.backbone.config, "image_aspect_ratio", None)
+        processed_images = []
+        images = [val for pair in zip(rgb_pil_images, depth_pil_images) for val in pair]
+        if image_aspect_ratio == 'pad':
+            for image in images:
+                image = self.backbone.expand2square(image, tuple(int(x * 255) for x in image_processor.image_mean))
+                image = image_processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
+                processed_images.append(image)
+        else:
+            processed_images = image_processor(images, return_tensors='pt')['pixel_values']
+        if all(x.shape == processed_images[0].shape for x in processed_images):
+            processed_images = torch.stack(processed_images, dim=0)
+        processed_images = processed_images.to(dtype=self.backbone.dtype,
+                                                  device=self.backbone.device).view(n_env, 2, 3, 384, 384)
 
-        if self.vision_tower_device != self.backbone.get_vision_tower().device:
-            logging.info('vision tower device: ' + str(self.backbone.get_vision_tower().device))
+        # get current rank
+        logging.info(f"vision tower device after process_images: {str(self.backbone.get_vision_tower().device)}")
 
         # visualize the pre-processed images
         # self.visualize_tensor_preprocess(processed_images)
