@@ -697,6 +697,7 @@ class SpatialVLMEncoder(nn.Module):
     def forward(self, observations: Dict[str, torch.Tensor]) -> torch.Tensor:  # type: ignore
 
         self.backbone.eval()
+        logging.info('vision tower device: ' + str(self.vision_tower_device))
         assert self.vision_tower_device == self.backbone.get_vision_tower().device, "Vision tower device mismatch"
 
         if self.is_blind:
@@ -722,11 +723,10 @@ class SpatialVLMEncoder(nn.Module):
             # element by element concatenation
             [val for pair in zip(rgb_pil_images, depth_pil_images) for val in pair],
             self.backbone.config).to(dtype=self.backbone.dtype,
-                                     device=self.backbone.device).view(n_env, 2, 3, 384, 384)
+                                     device=self.vision_tower_device).view(n_env, 2, 3, 384, 384)
 
-        self.backbone.get_vision_tower().to(self.vision_tower_device)
-
-
+        if self.vision_tower_device != self.backbone.get_vision_tower().device:
+            logging.info('vision tower device: ' + str(self.backbone.get_vision_tower().device))
 
         # visualize the pre-processed images
         # self.visualize_tensor_preprocess(processed_images)
