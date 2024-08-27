@@ -495,6 +495,8 @@ class HabitatBaselinesConfig(HabitatBaselinesBaseConfig):
     # Function signature: fn(save_file_path: str) -> None
     # If not specified, there is no callback.
     on_save_ckpt_callback: Optional[HydraCallbackConfig] = None
+    prompt: str = ""
+    visualize_prompt: bool = False
 
 
 @dataclass
