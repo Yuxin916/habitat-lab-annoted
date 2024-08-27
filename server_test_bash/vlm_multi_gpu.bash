@@ -1,7 +1,7 @@
 #!/bin/bash
 # Job script example
 ###PBS -q moreGPU-express
-#PBS -l select=1:ncpus=40:ngpus=8:host=dgx04
+#PBS -l select=1:ncpus=40:ngpus=8:mem=500gb:host=dgx04
 #PBS -N one_eps_multi_gpu
 #PBS -l software=nvidia-smi
 #PBS -l walltime=01:00:00
