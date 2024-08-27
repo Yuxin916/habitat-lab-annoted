@@ -8,6 +8,7 @@ import time
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 import os
+import logging
 import numpy as np
 import torch
 from gym import spaces
@@ -16,7 +17,6 @@ from torch.nn import functional as F
 from torchvision import transforms as T
 from torchvision.transforms import functional as TF
 from torchvision import transforms
-import logging
 
 # VLM requirement
 from torchvision.transforms import ToPILImage
@@ -49,9 +49,6 @@ from habitat_baselines.rl.ppo import Net, NetPolicy
 from habitat_baselines.utils.common import get_num_actions
 from habitat.utils.constant import category_to_id, parse_tensor_value
 
-from torch.utils.data.distributed import DistributedSampler
-from torch.nn.parallel import DistributedDataParallel as DDP
-
 """
 Download Dataset:
     huggingface-cli download google/siglip-so400m-patch14-384 --local-dir spatial_bot_test/siglip --local-dir-use-symlinks False
@@ -73,7 +70,6 @@ except ImportError:
 
 IMAGE_TOKEN_INDEX = [-201, -202]
 IGNORE_INDEX = -100
-choose_prompt = False
 
 @baseline_registry.register_policy
 class SpatialBotPolicy(NetPolicy):
@@ -90,6 +86,8 @@ class SpatialBotPolicy(NetPolicy):
         policy_config: "DictConfig" = None,
         aux_loss_config: Optional["DictConfig"] = None,
         fuse_keys: Optional[List[str]] = None,
+        prompt: Optional[str] = None,
+        visualize_prompt: bool = False,
         **kwargs,
     ):
         """
@@ -123,6 +121,8 @@ class SpatialBotPolicy(NetPolicy):
                 fuse_keys=fuse_keys,
                 force_blind_policy=force_blind_policy,
                 discrete_actions=discrete_actions,
+                prompt=prompt,
+                visualize_prompt=visualize_prompt,
             ),
             action_space=action_space,
             policy_config=policy_config,
@@ -175,6 +175,8 @@ class SpatialBotPolicy(NetPolicy):
             force_blind_policy=config.habitat_baselines.force_blind_policy,
             policy_config=config.habitat_baselines.rl.policy[agent_name],
             aux_loss_config=config.habitat_baselines.rl.auxiliary_losses,
+            prompt = config.habitat_baselines.prompt,
+            visualize_prompt = config.habitat_baselines.visualize_prompt,
             fuse_keys=None,
         )
 
@@ -197,13 +199,15 @@ class ObjectNavSpatialNet(Net):
         fuse_keys: Optional[List[str]],
         force_blind_policy: bool = False,
         discrete_actions: bool = True,
+        prompt: Optional[str] = None,
+        visualize_prompt: bool = False,
     ):
         super().__init__()
         rnn_input_size = 0
         self.discrete_actions = discrete_actions
         self._hidden_size = hidden_size
 
-        # # previous action embedding
+        # previous action embedding
         self.prev_action_embedding: nn.Module
         self.discrete_actions = discrete_actions
         self._n_prev_action = 32
@@ -235,6 +239,14 @@ class ObjectNavSpatialNet(Net):
                 InstanceImageGoalSensor.cls_uuid,
             }
             fuse_keys = [k for k in fuse_keys if k not in goal_sensor_keys]
+        self._fuse_keys_1d: List[str] = [
+            k for k in fuse_keys if len(observation_space.spaces[k].shape) == 1
+        ]
+        if len(self._fuse_keys_1d) != 0:
+            rnn_input_size += sum(
+                observation_space.spaces[k].shape[0]
+                for k in self._fuse_keys_1d
+            )
 
         # Add goal sensor embeddings
         if ObjectGoalSensor.cls_uuid in observation_space.spaces:
@@ -284,6 +296,8 @@ class ObjectNavSpatialNet(Net):
             with torch.no_grad():
                 self.visual_encoder = SpatialVLMEncoder(
                     use_obs_space,
+                    prompt,
+                    visualize_prompt,
                 )
 
             if not self.visual_encoder.is_blind:
@@ -414,10 +428,14 @@ class SpatialVLMEncoder(nn.Module):
     def __init__(
         self,
         observation_space: spaces.Dict,
+        prompt: Optional[str] = None,
+        visualize_prompt: bool = False,
         model_name: str = 'spatial_bot_test/',
     ):
         super().__init__()
 
+        self.prompt = prompt
+        self.visualize_prompt = visualize_prompt
         # get current working directory
         working_dir = os.path.dirname(os.getcwd())
         model_name = os.path.join(working_dir, model_name)
@@ -440,15 +458,7 @@ class SpatialVLMEncoder(nn.Module):
             self.backbone = AutoModelForCausalLM.from_pretrained(
                 model_name,  # path to huggingface download
                 torch_dtype=torch.float16,  # float32 for cpu
-                # device_map='auto',
                 trust_remote_code=True).to(torch.float16).eval()
-            # last_gpu_index = torch.cuda.device_count() - 1
-            # Check if there are any GPUs available
-            # if last_gpu_index >= 0:
-            #     self.vision_tower_device = torch.device(f'cuda:{last_gpu_index}')
-            # else:
-            #     self.vision_tower_device = torch.device('cpu')  # Fallback to CPU if no GPUs are available
-
             # load vision tower weights
             self.vision_tower = self.backbone.get_vision_tower().to(self.backbone.device)
             if not self.vision_tower.is_loaded:
@@ -456,8 +466,6 @@ class SpatialVLMEncoder(nn.Module):
             self.vision_tower = self.backbone.get_vision_tower().to(self.backbone.device)
 
             # Override the function in the backbone model
-            # self.backbone.encode_images = override_encode_images.__get__(
-            #     self.backbone)
             self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(
                 self.backbone)
 
@@ -480,6 +488,8 @@ class SpatialVLMEncoder(nn.Module):
 
             for param in self.backbone.parameters():
                 param.requires_grad = False
+            self.deleted_lm_head = self.backbone.lm_head
+            self.backbone.lm_head = nn.Sequential()
 
             self.output_shape = (
                 1,
@@ -499,7 +509,6 @@ class SpatialVLMEncoder(nn.Module):
         - Rescale the normalized images to the range [0, 255] and convert to uint8.
         """
         # batch(n_env) x channel x height x width
-        image = image[:, :3]  # Ensure only RGB channels are considered
         # Get the dimensions
         B, C, H, W = image.size()
 
@@ -515,10 +524,14 @@ class SpatialVLMEncoder(nn.Module):
         image_rescaled = (image_normalized * 255).clamp(0, 255).to(
             torch.uint8)
 
+        if C == 1:
+            # Repeat the single-channel depth image to make it a three-channel image
+            image_rescaled = image_rescaled.repeat(1, 3, 1, 1)
+
         # transform to RGBA model PIL image list
         to_pil = transforms.ToPILImage()
         pil_images = [
-            to_pil(image_rescaled[i]).convert('RGB') for i in range(B)
+            to_pil(image_rescaled[i]).convert('RGBA') for i in range(B)
         ]
 
         # Optional: Display or save the images
@@ -595,19 +608,7 @@ class SpatialVLMEncoder(nn.Module):
         str_compass = parse_tensor_value(observations['compass'])
         robot_position = f"GPS: {str_gps}  Compass: {str_compass}"
 
-        # prompt_template = "Find the {GOAL_NAME}. Your relative position relative to the start point is {ROBOT_POSITION}."
-        # prompt_template = """Find the {GOAL_NAME}. If the target object is not visible, desribe the current objects spatial relationship."""
-        # prompt_template = """Ignore wall, floor, ceiling, and window. List all objects detected and describe their spatial relationship related to '{GOAL_NAME}' in home scene."""
-        # prompt_template = """What object is in the image?"""
-        # prompt_template = ("Describe the objects in a home scene and their spatial relationships, "
-        #                    "excluding any structural elements like walls, windows, or ceilings. "
-        #                    "Provide your description in a numerical list, indicating how each item is "
-        #                    "positioned relative to others using terms like 'to the left of,' 'to the right of,' "
-        #                    "'above,' 'below,' 'in front of,' and 'behind.'")
-        prompt_template = ("Describe the spatial relationships between movable objects in a home scene, "
-                           "avoiding any mention of structural elements like walls, windows, or ceilings. "
-                           "List each object and describe its position relative to other objects in a clear, "
-                           "numerical format. Use the structure 'object - To the relation of the object' for each entry.")
+        prompt_template = self.prompt
         prompt = prompt_template.format(GOAL_NAME=category_to_id[goal_name[0]],
                                         ROBOT_POSITION=robot_position)
         return prompt
@@ -653,7 +654,7 @@ class SpatialVLMEncoder(nn.Module):
         batch_size = observations['gps'].shape[0]
         # text prompt
         # Formulate text prompts for all observations at once
-        prompts = [
+        self.prompts = [
             self.form_prompt(
                 {key: value[i] for key, value in observations.items()})
             for i in range(batch_size)
@@ -666,7 +667,7 @@ class SpatialVLMEncoder(nn.Module):
                 f"The assistant gives helpful, detailed, and polite answers to the user's questions. "
                 f"USER: <image 1>\n<image 2>\n{prompt} ASSISTANT:"
             )
-            for prompt in prompts
+            for prompt in self.prompts
         ]
 
         # Tokenize the texts and create input_ids tensors
@@ -719,94 +720,55 @@ class SpatialVLMEncoder(nn.Module):
 
         # (rgb_batch(n_env) + rgb_batch(n_env)) x channel x height x width
         # first time need to load the visual encoder weights
-        image_processor = self.vision_tower.image_processor
-        image_aspect_ratio = getattr(self.backbone.config, "image_aspect_ratio", None)
-        processed_images = []
-        images = [val for pair in zip(rgb_pil_images, depth_pil_images) for val in pair]
-        if image_aspect_ratio == 'pad':
-            for image in images:
-                image = self.backbone.expand2square(image, tuple(int(x * 255) for x in image_processor.image_mean))
-                image = image_processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
-                processed_images.append(image)
-        else:
-            processed_images = image_processor(images, return_tensors='pt')['pixel_values']
-        if all(x.shape == processed_images[0].shape for x in processed_images):
-            processed_images = torch.stack(processed_images, dim=0)
-        processed_images = processed_images.to(dtype=self.backbone.dtype,
-                                                  device=self.backbone.device).view(n_env, 2, 3, 384, 384)
+        processed_images = self.backbone.process_images(
+            # element by element concatenation
+            [val for pair in zip(rgb_pil_images, depth_pil_images) for val in pair],
+            self.backbone.config).to(dtype=self.backbone.dtype,
+                                     device=self.backbone.device).view(n_env, 2, 3, 384, 384)
 
         # visualize the pre-processed images
         # self.visualize_tensor_preprocess(processed_images)
 
-        """for loop inference"""
-        # start_time = time.time()
-        # hidden_states = []
-        # for i in range(n_env):
-        #     outputs = self.backbone.generate(
-        #         padded_input_ids_batch[i].unsqueeze(0),  # 1 x input_length
-        #         images=processed_images[i],  # 2 x 3 x 384 x 384
-        #         max_new_tokens=250,
-        #         output_hidden_states=True,
-        #         return_dict_in_generate=True,
-        #         use_cache=True,
-        #         repetition_penalty=1.0  # increase this to avoid chattering
-        #     )
-        #     logging.info(self.tokenizer.decode(outputs.sequences[0][padded_input_ids_batch.shape[1]:],
-        #                                         skip_special_tokens=True).strip())
-        #     hidden_states.append(outputs.hidden_states[-1][-1])
-        #
-        #
-        # logging.info(f"Time taken: {time.time() - start_time:.2f}s")
-        #
-        # return torch.stack(hidden_states).squeeze(1)
-        """for loop inference"""
+        with torch.no_grad():
+            last_hidden_layer = self.backbone(
+                padded_input_ids_batch,  # n_env x input_length
+                images=processed_images,  # n_env x 2 x 3 x 384 x 384
+                output_hidden_states=True,
+                use_cache=True,
+            ).hidden_states[-1]  # Final layer hidden states
 
-        # # LOG which rank is running
-        # logging.info(f"Rank: {torch.distributed.get_rank()}")
-        # logging.info('-------Inference----------')
-        # # check each layer's device
-        # for name, param in self.backbone.named_parameters():
-        #     logging.info(f"Parameter: {name} is on device: {param.device}")
-        # logging.info('padded_input_ids_batch device: ' + str(padded_input_ids_batch.device))
-        # logging.info('processed_images device: ' + str(processed_images.device))
+            max_pooled_hidden_state = torch.max(last_hidden_layer, dim=1).values.unsqueeze(1)
+            # max_pooled_hidden_state = F.max_pool1d(last_hidden_layer.permute(0, 2, 1),
+            #                                        kernel_size=last_hidden_layer.size(1)).permute(0, 2, 1)
 
-        # start_time = time.time()
-        last_hidden_layer = self.backbone(
-            padded_input_ids_batch,  # n_env x input_length
-            images=processed_images,  # n_env x 2 x 3 x 384 x 384
-            output_hidden_states=True,
-            use_cache=True,
-        ).hidden_states[-1]  # Final layer hidden states
-        # logging.info(f"Time taken for forward pass: {time.time() - start_time:.2f}s")
-        # logging.info('-------Inference----------')
 
-        max_pooled_hidden_state = F.max_pool1d(last_hidden_layer.permute(0, 2, 1),
-                                               kernel_size=last_hidden_layer.size(1)).permute(0, 2, 1)
+        if self.visualize_prompt:
+            self.backbone.lm_head = self.deleted_lm_head
+            logging.info(self.prompts)
+            # batch x output_id
+            start_time = time.time()
+            outputs = self.backbone.generate(
+                padded_input_ids_batch, # n_env x input_length
+                images=processed_images,  # n_env x 2 x 3 x 384 x 384
+                max_new_tokens=150,
+                output_hidden_states=True,
+                return_dict_in_generate=True,
+                use_cache=True,
+                repetition_penalty=1.0,
+                temperature=0,
+                # output_attentions=True
+            )
+            logging.info(f"Time taken for generation: {time.time() - start_time:.2f}s")
+            # The generated sequences
+            generated_sequences = outputs.sequences
 
-        # if choose_prompt:
-        #     # batch x output_id
-        #     start_time = time.time()
-        #     outputs = self.backbone.generate(
-        #         padded_input_ids_batch, # n_env x input_length
-        #         images=processed_images,  # n_env x 2 x 3 x 384 x 384
-        #         max_new_tokens=150,
-        #         output_hidden_states=True,
-        #         return_dict_in_generate=True,
-        #         use_cache=True,
-        #         repetition_penalty=1.0,
-        #         temperature=0,
-        #         # output_attentions=True
-        #     )
-        #     logging.info(f"Time taken for generation: {time.time() - start_time:.2f}s")
-        #     # The generated sequences
-        #     generated_sequences = outputs.sequences
-        #
-        #     # logging.info([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
-        #     #                                                           skip_special_tokens=True)])
-        #     for ans in self.tokenizer.batch_decode(
-        #         generated_sequences[:, padded_input_ids_batch.shape[1]:],
-        #         skip_special_tokens=True):
-        #         logging.info(ans.strip())
+            # logging.info([ans.strip() for ans in self.tokenizer.batch_decode(generated_sequences[:, padded_input_ids_batch.shape[1]:],
+            #                                                           skip_special_tokens=True)])
+            for ans in self.tokenizer.batch_decode(
+                generated_sequences[:, padded_input_ids_batch.shape[1]:],
+                skip_special_tokens=True):
+                logging.info(ans.strip())
+            self.backbone.lm_head = nn.Sequential()
 
         return max_pooled_hidden_state
 
@@ -823,39 +785,10 @@ class SpatialVLMEncoder(nn.Module):
 
         plt.show()
 
-def override_encode_images(self, images):
-    """
-    Override method to encode images in the backbone model.
-    This function assumes it is being called within the context of the backbone model.
-    """
-    # Get the vision tower and its device
-    vision_tower = self.get_vision_tower()
-    vision_tower_device = next(vision_tower.parameters()).device
-    logging.info(f"vision_tower_device: {vision_tower_device}")
-
-    # Move images to the vision tower's device
-    images = images.to(vision_tower_device)
-
-    # Encode images using the vision tower
-    image_features = vision_tower(images)
-    logging.info(f"Image features device after vision tower: {image_features.device}")
-
-    # Determine the device of mm_projector
-    mm_projector_device = next(self.get_model().mm_projector.parameters()).device
-    logging.info(f"mm_projector_device: {mm_projector_device}")
-
-    # Move image_features to the mm_projector's device
-    image_features = image_features.to(mm_projector_device)
-    logging.info(f"Image features moved to mm_projector device: {image_features.device}")
-
-    # Apply mm_projector on the image features
-    image_features = self.get_model().mm_projector(image_features)
-
-    return image_features
-
 
 def override(
-    self, input_ids, position_ids, attention_mask, past_key_values, labels, images
+    self, input_ids, position_ids, attention_mask, past_key_values, labels,
+    images
 ):
     # input_ids: 2 x 128
     # position_ids: 2 x 128
@@ -978,8 +911,11 @@ def override(
         num_images = sum(
             input_ids_counter[element] for element in IMAGE_TOKEN_INDEX)
 
-        common_elements_positions = [index for index, value in enumerate(input_ids_list) if value in set(IMAGE_TOKEN_INDEX)]
-        image_token_indices = [-1] + common_elements_positions + [cur_input_ids.shape[0]]
+        common_elements_positions = [index for index, value in
+                                     enumerate(input_ids_list) if
+                                     value in set(IMAGE_TOKEN_INDEX)]
+        image_token_indices = [-1] + common_elements_positions + [
+            cur_input_ids.shape[0]]
 
         cur_input_ids_noim = []
         cur_labels = labels[batch_idx]
@@ -1025,30 +961,46 @@ def override(
     batch_size = len(new_input_embeds)
 
     new_input_embeds_padded = []
-    new_labels_padded = torch.full((batch_size, max_len), IGNORE_INDEX, dtype=new_labels[0].dtype, device=new_labels[0].device)
-    attention_mask = torch.zeros((batch_size, max_len), dtype=attention_mask.dtype, device=attention_mask.device)
-    position_ids = torch.zeros((batch_size, max_len), dtype=position_ids.dtype, device=position_ids.device)
+    new_labels_padded = torch.full((batch_size, max_len), IGNORE_INDEX,
+                                   dtype=new_labels[0].dtype,
+                                   device=new_labels[0].device)
+    attention_mask = torch.zeros((batch_size, max_len),
+                                 dtype=attention_mask.dtype,
+                                 device=attention_mask.device)
+    position_ids = torch.zeros((batch_size, max_len),
+                               dtype=position_ids.dtype,
+                               device=position_ids.device)
 
-    for i, (cur_new_embed, cur_new_labels) in enumerate(zip(new_input_embeds, new_labels)):
+    for i, (cur_new_embed, cur_new_labels) in enumerate(
+        zip(new_input_embeds, new_labels)):
         cur_len = cur_new_embed.shape[0]
-        if getattr(self.config, 'tokenizer_padding_side', 'right') == "left":
+        if getattr(self.config, 'tokenizer_padding_side',
+                   'right') == "left":
             new_input_embeds_padded.append(torch.cat((
-                torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=cur_new_embed.dtype, device=cur_new_embed.device),
+                torch.zeros((max_len - cur_len, cur_new_embed.shape[1]),
+                            dtype=cur_new_embed.dtype,
+                            device=cur_new_embed.device),
                 cur_new_embed
             ), dim=0))
             if cur_len > 0:
                 new_labels_padded[i, -cur_len:] = cur_new_labels
                 attention_mask[i, -cur_len:] = True
-                position_ids[i, -cur_len:] = torch.arange(0, cur_len, dtype=position_ids.dtype, device=position_ids.device)
+                position_ids[i, -cur_len:] = torch.arange(0, cur_len,
+                                                          dtype=position_ids.dtype,
+                                                          device=position_ids.device)
         else:
             new_input_embeds_padded.append(torch.cat((
                 cur_new_embed,
-                torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=cur_new_embed.dtype, device=cur_new_embed.device)
+                torch.zeros((max_len - cur_len, cur_new_embed.shape[1]),
+                            dtype=cur_new_embed.dtype,
+                            device=cur_new_embed.device)
             ), dim=0))
             if cur_len > 0:
                 new_labels_padded[i, :cur_len] = cur_new_labels
                 attention_mask[i, :cur_len] = True
-                position_ids[i, :cur_len] = torch.arange(0, cur_len, dtype=position_ids.dtype, device=position_ids.device)
+                position_ids[i, :cur_len] = torch.arange(0, cur_len,
+                                                         dtype=position_ids.dtype,
+                                                         device=position_ids.device)
 
     new_input_embeds = torch.stack(new_input_embeds_padded, dim=0)
 
@@ -1064,5 +1016,4 @@ def override(
 
     if _position_ids is None:
         position_ids = None
-
     return None, position_ids, attention_mask, past_key_values, new_input_embeds, new_labels
