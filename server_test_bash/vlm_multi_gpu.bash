@@ -20,13 +20,13 @@
 
 ### Multi GPU
 set -x
-python -u -m torch.distributed.launch --nnodes=1 --nproc_per_node=8 \
+python -u -m torch.distributed.launch --nnodes=1 --nproc_per_node=6 \
 --use_env \
 habitat-baselines/habitat_baselines/run.py \
 --config-name=objectnav/saved_config/vlm_rl_all_input.yaml \
 habitat.dataset.train_eps=1 \
-habitat_baselines.num_environments=5 \
-habitat_baselines.trainer_name=ver \
+habitat_baselines.num_environments=3 \
+habitat_baselines.trainer_name=ddppo \
 habitat_baselines.log_interval=1 \
 habitat_baselines.tensorboard_dir="log/tb/one_eps_multi_gpu" \
 habitat_baselines.video_dir="log/video_dir/one_eps_multi_gpu" \
