@@ -2,13 +2,13 @@
 # Job script example
 ###PBS -q moreGPU-express
 #PBS -l select=1:ncpus=40:ngpus=8:host=dgx04
-#PBS -N baseline_multi_gpu
+#PBS -N one_eps_multi_gpu
 #PBS -l software=nvidia-smi
 #PBS -l walltime=01:00:00
 #PBS -m abe
 #PBS -M stucaiy@i2r.a-star.edu.sg
-#PBS -o /home/i2r/stucaiy/scratch/yuxin_projects/icra2024/server_test_bash/vlm_multi_gpu.out
-#PBS -e /home/i2r/stucaiy/scratch/yuxin_projects/icra2024/server_test_bash/vlm_multi_gpu.error
+#PBS -o /home/i2r/stucaiy/scratch/yuxin_projects/icra2024/server_test_bash/one_eps_multi_gpu.out
+#PBS -e /home/i2r/stucaiy/scratch/yuxin_projects/icra2024/server_test_bash/one_eps_multi_gpu.error
 
 
 
@@ -27,4 +27,9 @@ habitat-baselines/habitat_baselines/run.py \
 habitat_baselines.num_environments=5 \
 habitat_baselines.trainer_name=ver \
 habitat_baselines.log_interval=1 \
+habitat_baselines.tensorboard_dir="log/tb/one_eps_multi_gpu" \
+habitat_baselines.video_dir="log/video_dir/one_eps_multi_gpu" \
+habitat_baselines.eval_ckpt_path_dir="ckpt/one_eps_multi_gpu/latest.pth" \
+habitat_baselines.checkpoint_folder="ckpt/one_eps_multi_gpu/" \
+habitat_baselines.log_file="log/log/one_eps_multi_gpu.log" \
 habitat_baselines.evaluate=False

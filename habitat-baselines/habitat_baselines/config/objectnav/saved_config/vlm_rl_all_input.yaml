@@ -15,6 +15,7 @@ habitat:
   dataset:
     # use the clean habitat v2 dataset
     split: "one"
+    train_eps: 20
     # the reason why i use absolute path, i download data to another folder
     data_path: "data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz"
     scenes_dir: "data/scene_datasets/"

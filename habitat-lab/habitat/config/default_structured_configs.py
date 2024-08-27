@@ -1895,6 +1895,8 @@ class DatasetConfig(HabitatBaseConfig):
         "data/datasets/pointnav/"
         "habitat-test-scenes/v1/{split}/{split}.json.gz"
     )
+    # how many episodes to train for in scene
+    train_eps: int = 20
 
 
 @dataclass
