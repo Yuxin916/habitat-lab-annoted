@@ -24,6 +24,7 @@ python -u -m torch.distributed.launch --nnodes=1 --nproc_per_node=8 \
 --use_env \
 habitat-baselines/habitat_baselines/run.py \
 --config-name=objectnav/saved_config/vlm_rl_all_input.yaml \
+habitat.dataset.train_eps=1 \
 habitat_baselines.num_environments=5 \
 habitat_baselines.trainer_name=ver \
 habitat_baselines.log_interval=1 \
