@@ -315,7 +315,7 @@ class ObjectNavSpatialNet(Net):
                         hidden_size, hidden_size
                     ),
                     nn.ReLU(),
-                ).to(torch.float16)
+                )
         else:
             raise ValueError(f"Invalid backbone: {backbone}")
 
@@ -374,9 +374,70 @@ class ObjectNavSpatialNet(Net):
 
             # visual_feats = self.test(visual_feats.unsqueeze(1)).view(
             #     visual_feats.size(0), -1)
-            visual_feats = self.adapter(visual_feats.squeeze(1).to(torch.float16))
+            visual_feats = self.adapter(visual_feats.squeeze(1))
             aux_loss_state["perception_embed"] = visual_feats
             x.append(visual_feats)
+
+        if len(self._fuse_keys_1d) != 0:
+            fuse_states = torch.cat(
+                [observations[k] for k in self._fuse_keys_1d], dim=-1
+            )
+            x.append(fuse_states.float())
+
+        if IntegratedPointGoalGPSAndCompassSensor.cls_uuid in observations:
+            goal_observations = observations[
+                IntegratedPointGoalGPSAndCompassSensor.cls_uuid
+            ]
+            if goal_observations.shape[1] == 2:
+                # Polar Dimensionality 2
+                # 2D polar transform
+                goal_observations = torch.stack(
+                    [
+                        goal_observations[:, 0],
+                        torch.cos(-goal_observations[:, 1]),
+                        torch.sin(-goal_observations[:, 1]),
+                    ],
+                    -1,
+                )
+            else:
+                assert (
+                    goal_observations.shape[1] == 3
+                ), "Unsupported dimensionality"
+                vertical_angle_sin = torch.sin(goal_observations[:, 2])
+                # Polar Dimensionality 3
+                # 3D Polar transformation
+                goal_observations = torch.stack(
+                    [
+                        goal_observations[:, 0],
+                        torch.cos(-goal_observations[:, 1])
+                        * vertical_angle_sin,
+                        torch.sin(-goal_observations[:, 1])
+                        * vertical_angle_sin,
+                        torch.cos(goal_observations[:, 2]),
+                    ],
+                    -1,
+                )
+
+            x.append(self.tgt_embeding(goal_observations))
+
+        if PointGoalSensor.cls_uuid in observations:
+            goal_observations = observations[PointGoalSensor.cls_uuid]
+            x.append(self.pointgoal_embedding(goal_observations))
+
+        if ProximitySensor.cls_uuid in observations:
+            sensor_observations = observations[ProximitySensor.cls_uuid]
+            x.append(self.proximity_embedding(sensor_observations))
+
+        if HeadingSensor.cls_uuid in observations:
+            sensor_observations = observations[HeadingSensor.cls_uuid]
+            sensor_observations = torch.stack(
+                [
+                    torch.cos(sensor_observations[0]),
+                    torch.sin(sensor_observations[0]),
+                ],
+                -1,
+            )
+            x.append(self.heading_embedding(sensor_observations))
 
         # Object goal
         if ObjectGoalSensor.cls_uuid in observations:
@@ -402,6 +463,18 @@ class ObjectNavSpatialNet(Net):
                 self.gps_embedding(observations[EpisodicGPSSensor.cls_uuid])
             )
 
+        for uuid in [
+            ImageGoalSensor.cls_uuid,
+            InstanceImageGoalSensor.cls_uuid,
+        ]:
+            if uuid in observations:
+                goal_image = observations[uuid]
+
+                goal_visual_encoder = getattr(self, f"{uuid}_encoder")
+                goal_visual_output = goal_visual_encoder({"rgb": goal_image})
+
+                goal_visual_fc = getattr(self, f"{uuid}_fc")
+                x.append(goal_visual_fc(goal_visual_output))
 
         if self.discrete_actions:
             prev_actions = prev_actions.squeeze(-1)
@@ -414,6 +487,7 @@ class ObjectNavSpatialNet(Net):
             prev_actions = self.prev_action_embedding(
                 masks * prev_actions.float()
             )
+
         x.append(prev_actions)
 
         out = torch.cat(x, dim=1)
@@ -460,7 +534,7 @@ class SpatialVLMEncoder(nn.Module):
                 torch_dtype=torch.float16,  # float32 for cpu
                 trust_remote_code=True).to(torch.float16).eval()
             # load vision tower weights
-            self.vision_tower = self.backbone.get_vision_tower().to(self.backbone.device)
+            self.vision_tower = self.backbone.get_vision_tower()
             if not self.vision_tower.is_loaded:
                 self.vision_tower.load_model()
             self.vision_tower = self.backbone.get_vision_tower().to(self.backbone.device)
@@ -479,8 +553,7 @@ class SpatialVLMEncoder(nn.Module):
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
-                trust_remote_code=True
-            )
+                trust_remote_code=True)
 
             # for batch inference
             self.tokenizer.padding_side = "left"

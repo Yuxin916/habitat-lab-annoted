@@ -27,10 +27,10 @@ habitat-baselines/habitat_baselines/run.py \
 habitat.dataset.train_eps=1 \
 habitat_baselines.num_environments=3 \
 habitat_baselines.trainer_name=ddppo \
-habitat_baselines.log_interval=1 \
-habitat_baselines.tensorboard_dir="log/tb/one_eps_multi_gpu" \
-habitat_baselines.video_dir="log/video_dir/one_eps_multi_gpu" \
-habitat_baselines.eval_ckpt_path_dir="ckpt/one_eps_multi_gpu/latest.pth" \
-habitat_baselines.checkpoint_folder="ckpt/one_eps_multi_gpu/" \
-habitat_baselines.log_file="log/log/one_eps_multi_gpu.log" \
-habitat_baselines.evaluate=False
+habitat_baselines.log_interval=5 \
+habitat_baselines.tensorboard_dir="log/tb/vlm_one_eps" \
+habitat_baselines.video_dir="log/video_dir/vlm_one_eps" \
+habitat_baselines.eval_ckpt_path_dir="ckpt/vlm_one_eps/latest.pth" \
+habitat_baselines.checkpoint_folder="ckpt/vlm_one_eps/" \
+habitat_baselines.log_file="log/log/vlm_one_eps.log" \
+habitat_baselines.prompt="List all detected movable objects in provided home scene RGB-D images and describe their spatial relationships, including proximity and layout."

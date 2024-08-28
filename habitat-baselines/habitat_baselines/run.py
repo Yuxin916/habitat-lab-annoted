@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 """
 train
---config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ddppo habitat_baselines.evaluate=False
+--config-name=objectnav/saved_config/vlm_rl_all_input.yaml habitat_baselines.trainer_name=ddppo habitat_baselines.evaluate=False
 
 eval
 --config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.num_environments=1 habitat_baselines.evaluate=True
