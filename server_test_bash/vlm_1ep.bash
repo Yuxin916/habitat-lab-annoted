@@ -34,4 +34,4 @@ habitat_baselines.video_dir="log/video_dir/vlm_one_eps" \
 habitat_baselines.eval_ckpt_path_dir="ckpt/vlm_one_eps/latest.pth" \
 habitat_baselines.checkpoint_folder="ckpt/vlm_one_eps/" \
 habitat_baselines.log_file="log/log/vlm_one_eps.log" \
-habitat_baselines.prompt="List all detected movable objects in provided home scene RGB-D images and describe their spatial relationships, including proximity and layout."
+habitat_baselines.prompt="'List all detected movable objects in provided home scene RGB-D images and describe their spatial relationships, including proximity and layout.'"

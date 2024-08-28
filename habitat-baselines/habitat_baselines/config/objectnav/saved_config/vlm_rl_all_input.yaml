@@ -36,7 +36,7 @@ habitat_baselines:
   # Force PyTorch to be single threaded as
   # this improves performance considerably
   force_torch_single_threaded: True
-  prompt: "List all detected movable objects in provided home scene RGB-D images and describe their spatial relationships, including proximity and layout."
+  prompt: "'List all detected movable objects in provided home scene RGB-D images and describe their spatial relationships, including proximity and layout.'"
   visualize_prompt: False
   evaluate: False
 
