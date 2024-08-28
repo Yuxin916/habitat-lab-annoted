@@ -1,10 +1,10 @@
 #!/bin/bash
 # Job script example
-###PBS -q moreGPU-express
-#PBS -l select=1:ncpus=40:ngpus=8:mem=500gb:host=dgx04
-#PBS -N one_eps_multi_gpu
+###PBS -q lessGPU
+#PBS -l select=1:ncpus=15:ngpus=3:mem=256gb:host=dgx02
+#PBS -N vlm_1_eps
 #PBS -l software=nvidia-smi
-#PBS -l walltime=01:00:00
+#PBS -l walltime=60:00:00
 #PBS -m abe
 #PBS -M stucaiy@i2r.a-star.edu.sg
 #PBS -o /home/i2r/stucaiy/scratch/yuxin_projects/icra2024/server_test_bash/one_eps_multi_gpu.out
@@ -20,14 +20,15 @@
 
 ### Multi GPU
 set -x
-python -u -m torch.distributed.launch --nnodes=1 --nproc_per_node=6 \
+python -u -m torch.distributed.launch --nnodes=1 --nproc_per_node=3 \
 --use_env \
 habitat-baselines/habitat_baselines/run.py \
 --config-name=objectnav/saved_config/vlm_rl_all_input.yaml \
 habitat.dataset.train_eps=1 \
-habitat_baselines.num_environments=3 \
+habitat_baselines.num_environments=6 \
 habitat_baselines.trainer_name=ddppo \
 habitat_baselines.log_interval=5 \
+habitat_baselines.rl.ppo.num_steps=64 \
 habitat_baselines.tensorboard_dir="log/tb/vlm_one_eps" \
 habitat_baselines.video_dir="log/video_dir/vlm_one_eps" \
 habitat_baselines.eval_ckpt_path_dir="ckpt/vlm_one_eps/latest.pth" \
