@@ -22,9 +22,8 @@ if [ "$num_gpus" -eq 1 ]; then
 
     python habitat-baselines/habitat_baselines/run.py \
     --config-name=objectnav/saved_config/baseline_fix.yaml \
-    habitat_baselines.num_environments=4 \
-    habitat.dataset.train_eps=1 \
     habitat_baselines.num_environments=6 \
+    habitat.dataset.train_eps=1 \
     habitat_baselines.trainer_name=ddppo \
     habitat_baselines.log_interval=5 \
     habitat_baselines.rl.ppo.num_steps=128 \
