@@ -48,10 +48,10 @@ from habitat_baselines.rl.models.rnn_state_encoder import (
 from habitat_baselines.rl.ppo import Net, NetPolicy
 from habitat_baselines.utils.common import get_num_actions
 from habitat.utils.constant import category_to_id, parse_tensor_value
-
+import argparse
 """
 Download Dataset:
-    huggingface-cli download google/siglip-so400m-patch14-384 --local-dir spatial_bot_test/siglip --local-dir-use-symlinks False
+    huggingface-cli download google/siglip-so400m-patch14-384 --local-dir hf_spatialbot/siglip --local-dir-use-symlinks False
 My token:
     HUGGINGFACE_TOKEN=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
 """
@@ -70,6 +70,75 @@ except ImportError:
 
 IMAGE_TOKEN_INDEX = [-201, -202]
 IGNORE_INDEX = -100
+
+import os
+from dataclasses import dataclass, field
+import logging
+import pathlib
+from typing import Optional
+
+@dataclass
+class ModelArguments:
+    model_name_or_path: Optional[str] = field(default=None)
+    model_type: Optional[str] = field(default=None)
+    version: Optional[str] = field(default=None)
+    freeze_backbone: bool = field(default=False)
+    tune_mm_mlp_adapter: bool = field(default=False)
+    vision_tower: Optional[str] = field(default=None)
+    pretrain_mm_mlp_adapter: Optional[str] = field(default=None)
+    mm_projector_type: Optional[str] = field(default='mlp2x_gelu')
+    # ===================================================================
+    multi_image_tower: Optional[str] = field(default=None)
+    # ===================================================================
+
+@dataclass
+class DataArguments:
+    data_path: str = field(default=None, metadata={"help": "Path to the training data."})
+    lazy_preprocess: bool = False
+    is_multimodal: bool = True
+    image_folder: Optional[str] = field(default=None)
+    image_aspect_ratio: str = field(default=None)
+
+@dataclass
+class TrainingArguments(transformers.TrainingArguments):
+    cache_dir: Optional[str] = field(default=None)
+    optim: str = field(default="adamw_torch")
+    remove_unused_columns: bool = field(default=False)
+    freeze_mm_mlp_adapter: bool = field(default=False)
+    mpt_attn_impl: Optional[str] = field(default="triton")
+    model_max_length: int = field(
+        default=512,
+        metadata={
+            "help":
+                "Maximum sequence length. Sequences will be right padded (and possibly truncated)."
+        },
+    )
+    double_quant: bool = field(
+        default=True,
+        metadata={"help": "Compress the quantization statistics through double quantization."}
+    )
+    quant_type: str = field(
+        default="nf4",
+        metadata={"help": "Quantization data type to use. Should be one of `fp4` or `nf4`."}
+    )
+    bits: int = field(
+        default=16,
+        metadata={"help": "How many bits to use."}
+    )
+    lora_enable: bool = False
+    lora_r: int = 64
+    lora_alpha: int = 16
+    lora_dropout: float = 0.05
+    lora_weight_path: str = ""
+    lora_bias: str = "none"
+    mm_projector_lr: Optional[float] = None
+    group_by_modality_length: bool = field(default=False)
+    # ================================================
+    tokenizer_model_max_length: Optional[int] = None
+    mul_image_enable: bool = False
+    # ================================================
+
+
 
 @baseline_registry.register_policy
 class SpatialBotPolicy(NetPolicy):
@@ -315,8 +384,7 @@ class ObjectNavSpatialNet(Net):
                         hidden_size, hidden_size
                     ),
                     nn.ReLU(),
-                )
-                #.to(torch.float16)
+                ).to(torch.float16)
         else:
             raise ValueError(f"Invalid backbone: {backbone}")
 
@@ -373,74 +441,13 @@ class ObjectNavSpatialNet(Net):
             else:
                 visual_feats = self.visual_encoder(observations)
 
-            visual_feats = self.adapter(visual_feats.squeeze(1)
-                                        #.to(torch.float16)
-                                        )
+            # visual_feats = self.test(visual_feats.unsqueeze(1)).view(
+            #     visual_feats.size(0), -1)
+            visual_feats = self.adapter(visual_feats.squeeze(1).to(torch.float16))
             aux_loss_state["perception_embed"] = visual_feats
             x.append(visual_feats)
 
-        if len(self._fuse_keys_1d) != 0:
-            fuse_states = torch.cat(
-                [observations[k] for k in self._fuse_keys_1d], dim=-1
-            )
-            x.append(fuse_states.float())
-
-        if IntegratedPointGoalGPSAndCompassSensor.cls_uuid in observations:
-            goal_observations = observations[
-                IntegratedPointGoalGPSAndCompassSensor.cls_uuid
-            ]
-            if goal_observations.shape[1] == 2:
-                # Polar Dimensionality 2
-                # 2D polar transform
-                goal_observations = torch.stack(
-                    [
-                        goal_observations[:, 0],
-                        torch.cos(-goal_observations[:, 1]),
-                        torch.sin(-goal_observations[:, 1]),
-                    ],
-                    -1,
-                )
-            else:
-                assert (
-                    goal_observations.shape[1] == 3
-                ), "Unsupported dimensionality"
-                vertical_angle_sin = torch.sin(goal_observations[:, 2])
-                # Polar Dimensionality 3
-                # 3D Polar transformation
-                goal_observations = torch.stack(
-                    [
-                        goal_observations[:, 0],
-                        torch.cos(-goal_observations[:, 1])
-                        * vertical_angle_sin,
-                        torch.sin(-goal_observations[:, 1])
-                        * vertical_angle_sin,
-                        torch.cos(goal_observations[:, 2]),
-                    ],
-                    -1,
-                )
-
-            x.append(self.tgt_embeding(goal_observations))
-
-        if PointGoalSensor.cls_uuid in observations:
-            goal_observations = observations[PointGoalSensor.cls_uuid]
-            x.append(self.pointgoal_embedding(goal_observations))
-
-        if ProximitySensor.cls_uuid in observations:
-            sensor_observations = observations[ProximitySensor.cls_uuid]
-            x.append(self.proximity_embedding(sensor_observations))
-
-        if HeadingSensor.cls_uuid in observations:
-            sensor_observations = observations[HeadingSensor.cls_uuid]
-            sensor_observations = torch.stack(
-                [
-                    torch.cos(sensor_observations[0]),
-                    torch.sin(sensor_observations[0]),
-                ],
-                -1,
-            )
-            x.append(self.heading_embedding(sensor_observations))
-
-        # ObjectGoal
+        # Object goal
         if ObjectGoalSensor.cls_uuid in observations:
             object_goal = observations[ObjectGoalSensor.cls_uuid].long()
             x.append(self.obj_categories_embedding(object_goal).squeeze(dim=1))
@@ -464,18 +471,6 @@ class ObjectNavSpatialNet(Net):
                 self.gps_embedding(observations[EpisodicGPSSensor.cls_uuid])
             )
 
-        for uuid in [
-            ImageGoalSensor.cls_uuid,
-            InstanceImageGoalSensor.cls_uuid,
-        ]:
-            if uuid in observations:
-                goal_image = observations[uuid]
-
-                goal_visual_encoder = getattr(self, f"{uuid}_encoder")
-                goal_visual_output = goal_visual_encoder({"rgb": goal_image})
-
-                goal_visual_fc = getattr(self, f"{uuid}_fc")
-                x.append(goal_visual_fc(goal_visual_output))
 
         if self.discrete_actions:
             prev_actions = prev_actions.squeeze(-1)
@@ -488,7 +483,6 @@ class ObjectNavSpatialNet(Net):
             prev_actions = self.prev_action_embedding(
                 masks * prev_actions.float()
             )
-
         x.append(prev_actions)
 
         out = torch.cat(x, dim=1)
@@ -506,8 +500,127 @@ class SpatialVLMEncoder(nn.Module):
         prompt: Optional[str] = None,
         visualize_prompt: bool = False,
         model_name: str = 'hf_spatialbot/',
+
     ):
         super().__init__()
+
+        def parse_arguments():
+            parser = argparse.ArgumentParser(
+                description="Training script for fine-tuning models.")
+
+            # Adding all the options with their default values
+            parser.add_argument('--lora_enable', type=bool, default=True,
+                                help='Enable LoRA')
+            parser.add_argument('--lora_r', type=int, default=128,
+                                help='Rank of LoRA')
+            parser.add_argument('--lora_alpha', type=int, default=256,
+                                help='Scale of LoRA')
+            parser.add_argument('--mm_projector_lr', type=float, default=2e-5,
+                                help='Learning rate for multimodal projector')
+            parser.add_argument('--deepspeed',
+                                default='./script/deepspeed/zero3.json',
+                                help='Deepspeed configuration file')
+            parser.add_argument('--model_name_or_path',
+                                default='../merged_model',
+                                help='Path to the pretrained model')
+            parser.add_argument('--model_type', default='default_model_type',
+                                help='Type of model')
+            parser.add_argument('--version', default='bunny',
+                                help='Version tag')
+            parser.add_argument('--data_path',
+                                default='./data/finetune/SpatialQA.json',
+                                help='Data path for training')
+            parser.add_argument('--image_folder',
+                                default='./data/finetune/images',
+                                help='Folder containing training images')
+            parser.add_argument('--vision_tower',
+                                default='../hf_spatialbot/siglip',
+                                help='Vision tower setting')
+            parser.add_argument('--mm_projector_type', default='mlp2x_gelu',
+                                help='Type of multimodal projector')
+            parser.add_argument('--image_aspect_ratio', default='pad',
+                                help='Image aspect ratio processing')
+            parser.add_argument('--group_by_modality_length', type=bool,
+                                default=False,
+                                help='Group by modality length flag')
+            parser.add_argument('--bf16', type=bool, default=True,
+                                help='Use bf16 precision')
+            parser.add_argument('--output_dir',
+                                default='./checkpoints-default_model_type/default_output_dir',
+                                help='Output directory for checkpoints and logs')
+            parser.add_argument('--num_train_epochs', type=int, default=1,
+                                help='Number of training epochs')
+            parser.add_argument('--per_device_train_batch_size', type=int,
+                                default=8,
+                                help='Training batch size per device')
+            parser.add_argument('--per_device_eval_batch_size', type=int,
+                                default=4,
+                                help='Evaluation batch size per device')
+            parser.add_argument('--gradient_accumulation_steps', type=int,
+                                default=2,
+                                help='Number of gradient accumulation steps')
+            parser.add_argument('--evaluation_strategy', default='no',
+                                help='Evaluation strategy')
+            parser.add_argument('--save_strategy', default='steps',
+                                help='Checkpoint save strategy')
+            parser.add_argument('--save_steps', type=int, default=500,
+                                help='Steps between saves')
+            parser.add_argument('--save_total_limit', type=int, default=1,
+                                help='Maximum number of checkpoints to keep')
+            parser.add_argument('--learning_rate', type=float, default=2e-4,
+                                help='Learning rate')
+            parser.add_argument('--weight_decay', type=float, default=0.0,
+                                help='Weight decay')
+            parser.add_argument('--warmup_ratio', type=float, default=0.03,
+                                help='Warmup ratio')
+            parser.add_argument('--lr_scheduler_type', default='cosine',
+                                help='Type of learning rate scheduler')
+            parser.add_argument('--logging_steps', type=int, default=1,
+                                help='Number of logging steps')
+            parser.add_argument('--tf32', type=bool, default=True,
+                                help='Use TensorFlow 32 precision')
+            parser.add_argument('--model_max_length', type=int, default=2048,
+                                help='Maximum model input length')
+            parser.add_argument('--gradient_checkpointing', type=bool,
+                                default=True,
+                                help='Enable gradient checkpointing')
+            parser.add_argument('--dataloader_num_workers', type=int,
+                                default=4,
+                                help='Number of workers for data loading')
+            parser.add_argument('--lazy_preprocess', type=bool, default=True,
+                                help='Enable lazy preprocessing')
+            parser.add_argument('--report_to', default='none',
+                                help='Reporting configuration')
+
+            args = parser.parse_args()
+            return args
+
+        parser = parse_arguments()
+
+        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+        local_rank = training_args.local_rank
+        compute_dtype = (torch.float16 if training_args.fp16 else (
+            torch.bfloat16 if training_args.bf16 else torch.float32))
+        bnb_model_from_pretrained_args = {}
+        assert model_args.vision_tower is not None
+
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
+            padding_side="right",
+            use_fast=True,
+        )
+        if tokenizer.unk_token is not None and tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.unk_token
+
+        model = AutoModelForCausalLM.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            bos_token_id=tokenizer.bos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
+            **bnb_model_from_pretrained_args
+        )
 
         self.prompt = prompt
         self.visualize_prompt = visualize_prompt
@@ -533,17 +646,29 @@ class SpatialVLMEncoder(nn.Module):
             self.backbone = AutoModelForCausalLM.from_pretrained(
                 model_name,  # path to huggingface download
                 torch_dtype=torch.float16,  # float32 for cpu
-                # device_map='auto',
                 trust_remote_code=True).to(torch.float16).eval()
-            self.vision_tower = self.backbone.get_vision_tower()
+            # load vision tower weights
+            self.vision_tower = self.backbone.get_vision_tower().to(self.backbone.device)
             if not self.vision_tower.is_loaded:
                 self.vision_tower.load_model()
+            self.vision_tower = self.backbone.get_vision_tower().to(self.backbone.device)
+
+            # Override the function in the backbone model
+            self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(
+                self.backbone)
+
             # get self.backbone parameter size
             self.backbone_size = sum(p.numel() for p in self.backbone.parameters())
+            # logging.info(f"Backbone size: {self.backbone_size}")
+
+            # check each layer's device
+            # for name, param in self.backbone.named_parameters():
+            #     logging.info(f"Parameter: {name} is on device: {param.device}")
 
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
-                trust_remote_code=True)
+                trust_remote_code=True
+            )
 
             # for batch inference
             self.tokenizer.padding_side = "left"
@@ -553,9 +678,6 @@ class SpatialVLMEncoder(nn.Module):
                 param.requires_grad = False
             self.deleted_lm_head = self.backbone.lm_head
             self.backbone.lm_head = nn.Sequential()
-            # Override the function in the backbone model
-            self.backbone.prepare_inputs_labels_for_multimodal = override.__get__(
-                self.backbone)
 
             self.output_shape = (
                 1,
@@ -782,7 +904,7 @@ class SpatialVLMEncoder(nn.Module):
 
         # Pre-process the images
         rgb_pil_images = self.pre_process_rgb_image(rgb_image)
-        depth_pil_images = self.pre_process_rgb_image(depth_image)
+        depth_pil_images = self.pre_process_depth_image(depth_image)
 
         # (rgb_batch(n_env) + rgb_batch(n_env)) x channel x height x width
         # first time need to load the visual encoder weights
@@ -791,7 +913,6 @@ class SpatialVLMEncoder(nn.Module):
             [val for pair in zip(rgb_pil_images, depth_pil_images) for val in pair],
             self.backbone.config).to(dtype=self.backbone.dtype,
                                      device=self.backbone.device).view(n_env, 2, 3, 384, 384)
-        self.backbone.get_vision_tower().to(self.backbone.device)
 
         # visualize the pre-processed images
         # self.visualize_tensor_preprocess(processed_images)
@@ -862,8 +983,37 @@ def override(
     # attention_mask: 2 x 128
     # images: 2 x 2 x 3 x 384 x 384
     # rest all are None
+
+
+    # Ensure device consistency across all tensors
+    if input_ids is not None:
+        input_ids_device = input_ids.device
+    if position_ids is not None:
+        position_ids_device = position_ids.device
+    if attention_mask is not None:
+        attention_mask_device = attention_mask.device
+    if labels is not None:
+        labels_device = labels.device
+    if images is not None:
+        images_device = images.device
+
     # Get the vision tower (assuming it's a part of the model and resides on a specific device)
     vision_tower = self.get_vision_tower()
+    # Ensure images are on the same device as the vision tower
+    vision_tower_device = next(vision_tower.parameters()).device
+
+    # Determine the device of the embed_tokens layer
+    embed_tokens_device = next(self.get_model().embed_tokens.parameters()).device
+
+    # Ensure all input tensors are on the same device as the embed_tokens layer
+    if input_ids is not None and input_ids_device != embed_tokens_device:
+        input_ids = input_ids.to(embed_tokens_device)
+    if position_ids is not None and position_ids_device != embed_tokens_device:
+        position_ids = position_ids.to(embed_tokens_device)
+    if attention_mask is not None and attention_mask_device != embed_tokens_device:
+        attention_mask = attention_mask.to(embed_tokens_device)
+    if labels is not None and labels_device != embed_tokens_device:
+        labels = labels.to(embed_tokens_device)
 
     # Check for conditions for auto-regressive generation
     if vision_tower is None or images is None or input_ids.shape[1] == 1:
@@ -888,15 +1038,19 @@ def override(
     # Handling images and feature extraction
     if images.ndim == 5:
         # n_env x 2 x 3 x 384 x 384 -> 4 x 3 x 384 x 384
-        concat_images = torch.cat([image for image in images], dim=0)
+        if images_device != vision_tower_device:
+            images = images.to(vision_tower_device)
+        concat_images = torch.cat([image.to(vision_tower_device) for image in images], dim=0)
+
         image_features = self.encode_images(concat_images)
+
         split_sizes = [image.shape[0] for image in images]
         # list of n_env, each one's embedding is 2x729x 2560 (RGB Embedding and Depth Embedding)
         image_features = torch.split(image_features, split_sizes, dim=0)
         # list of n_env, each one's embedding is 1458 x 2560 (RGB Embedding and Depth Embedding)
         # image_features = [x.to(self.device) for x in image_features]
     else:
-        image_features = self.encode_images(images).to(self.device)
+        image_features = self.encode_images(images)
 
     # Let's just add dummy tensors if they do not exist,
     # it is a headache to deal with None all the time.
@@ -962,7 +1116,8 @@ def override(
 
         # Make sure all tensors are on the correct device
         cur_input_embeds = self.get_model().embed_tokens(
-            torch.cat(cur_input_ids_noim))
+            torch.cat(cur_input_ids_noim).to(embed_tokens_device)
+        )
         cur_input_embeds_no_im = torch.split(cur_input_embeds, split_sizes, dim=0)
 
         cur_new_input_embeds = []
