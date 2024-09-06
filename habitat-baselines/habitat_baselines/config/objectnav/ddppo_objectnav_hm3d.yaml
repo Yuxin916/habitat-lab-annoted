@@ -15,17 +15,17 @@ habitat:
   dataset:
     # use the clean habitat v2 dataset
     split: "minival"
-    data_path: "/home/tsaisplus/mrs_llm/clean_habitat_v2/habitat-lab/data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz"
-    scenes_dir: "/home/tsaisplus/mrs_llm/clean_habitat_v2/habitat-lab/data/scene_datasets/"
+    data_path: "data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz"
+    scenes_dir: "data/scene_datasets/"
 
 habitat_baselines:
   torch_gpu_id: 0
   tensorboard_dir: "log/tb/" #
   video_dir: "log/video_dir/" #
   test_episode_count: -1
-  eval_ckpt_path_dir: "ckpt/ddppo_single_hm3d/latest.pth" #
-  num_environments: 8 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
-  checkpoint_folder: "ckpt/ddppo_single_hm3d/" #
+  eval_ckpt_path_dir: "ckpt/single_ver_minival_converged/latest.pth" #
+  num_environments: 4 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
+  checkpoint_folder: "ckpt/single_ver_minival_converged/" #
   trainer_name: "ddppo"  # "ddppo" or "ppo" or "ver" (faster)
   num_updates: 270000
   log_interval: 10
@@ -38,6 +38,7 @@ habitat_baselines:
   eval:
     split: "minival"
     video_option: ["disk", "tensorboard"]
+    use_ckpt_config: False
 
   rl:
     policy:

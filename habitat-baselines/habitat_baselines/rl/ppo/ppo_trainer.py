@@ -838,6 +838,12 @@ class PPOTrainer(BaseRLTrainer):
             ckpt_dict["config"]
         )
         with read_write(config):
+            config.habitat.dataset.scenes_dir = 'data/scene_datasets/'
+            config.habitat.dataset.data_path = 'data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz'
+            config.habitat.simulator.scene_dataset = 'data/scene_datasets/hm3d_v0.2/hm3d_annotated_basis.scene_dataset_config.json'
+            config.habitat_baselines.eval_ckpt_path_dir = "ckpt/single_ver_minival_converged/latest.pth"
+            config.habitat_baselines.checkpoint_folder = "ckpt/single_ver_minival_converged/"
+
             config.habitat.dataset.split = config.habitat_baselines.eval.split
 
         if len(self.config.habitat_baselines.eval.video_option) > 0:
