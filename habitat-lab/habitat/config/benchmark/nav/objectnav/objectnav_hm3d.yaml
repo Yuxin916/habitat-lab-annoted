@@ -13,8 +13,18 @@ defaults:
 
 # config values overrides:
 habitat:
+  task:
+    success_reward: 2.5
+    slack_reward: -1e-3
+  dataset:
+    split: "val"
+    train_eps: 1
+    data_path: "data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz"
+    scenes_dir: "data/scene_datasets/"
   environment:
     max_episode_steps: 500
+    iterator_options:
+      max_scene_repeat_steps: 50000
   simulator:
     turn_angle: 30
     agents:

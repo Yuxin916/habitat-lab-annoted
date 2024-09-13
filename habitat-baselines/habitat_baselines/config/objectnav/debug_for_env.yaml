@@ -15,26 +15,30 @@ habitat:
   dataset:
     # use the clean habitat v2 dataset
     split: "one"
+    train_eps: 1
     # the reason why i use absolute path, i download data to another folder
     data_path: "data/datasets/objectnav/hm3d/v2/{split}/{split}.json.gz"
     scenes_dir: "data/scene_datasets/"
 
 habitat_baselines:
   torch_gpu_id: 0
-  tensorboard_dir: "log/tb/vlm_adapter" #
-  video_dir: "log/video_dir/vlm_adapter" #
+  tensorboard_dir: "log/tb/debug" #
+  video_dir: "log/video_dir/debug" #
   test_episode_count: -1
-  eval_ckpt_path_dir: "ckpt/vlm_adapter/latest.pth" #
+  eval_ckpt_path_dir: "ckpt/debug/latest.pth" #
   num_environments: 2 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
-  checkpoint_folder: "ckpt/vlm_adapter/" #
+  checkpoint_folder: "ckpt/debug/" #
   trainer_name: "ddppo"  # "ddppo" or "ppo" or "ver" (faster)
   num_updates: 27000
   log_interval: 5
-  log_file: "vlm_adapter.log" #
-  num_checkpoints: 500
+  log_file: "debug.log" #
+  num_checkpoints: 50
   # Force PyTorch to be single threaded as
   # this improves performance considerably
   force_torch_single_threaded: True
+  prompt: "''"
+  visualize_prompt: False
+  evaluate: False
 
   eval:
     split: "one"
@@ -43,7 +47,7 @@ habitat_baselines:
   rl:
     policy:
       main_agent:
-        name: "SpatialBotPolicy" # PointNavResNetPolicy | SpatialBotPolicy | SigLipPolicy | VLMVisualPolicy
+        name: "PointNavResNetPolicy" # PointNavResNetPolicy | SpatialBotPolicy | SigLipPolicy | VLMVisualPolicy
 
     ppo:
       # ppo params
@@ -83,6 +87,6 @@ habitat_baselines:
       reset_critic: False
 
       # Model parameters
-      backbone: BunnyPhiForCausalLM # se_resneXt50 | BunnyPhiForCausalLM | SigLip | VLMVisonTowerEncoder
+      backbone: se_resneXt50 # se_resneXt50 | BunnyPhiForCausalLM | SigLip | VLMVisonTowerEncoder
       rnn_type: LSTM
       num_recurrent_layers: 2

@@ -22,21 +22,28 @@ habitat:
 
 habitat_baselines:
   torch_gpu_id: 0
-  tensorboard_dir: "log/tb/modify_net_arch" #
-  video_dir: "log/video_dir/modify_net_arch" #
+  tensorboard_dir: "log/tb/vlm_adapter" #
+  video_dir: "log/video_dir/vlm_adapter" #
   test_episode_count: -1
-  eval_ckpt_path_dir: "ckpt/modify_net_arch/latest.pth" #
-  num_environments: 6 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
-  checkpoint_folder: "ckpt/modify_net_arch/" #
+  eval_ckpt_path_dir: "ckpt/vlm_adapter/latest.pth" #
+  num_environments: 4 # 8 FIXED to 4090 when training, 4 when eval the minieval ( Reducing the number of environments to be the number of scenes.)
+  checkpoint_folder: "ckpt/vlm_adapter/" #
   trainer_name: "ddppo"  # "ddppo" or "ppo" or "ver" (faster)
   num_updates: 27000
   log_interval: 5
-  log_file: "log/log/modify_net_arch.log" #
+  log_file: "log/log/vlm_adapter.log" #
   num_checkpoints: 500
   # Force PyTorch to be single threaded as
   # this improves performance considerably
   force_torch_single_threaded: True
-  prompt: "'List all detected movable objects in provided home scene RGB-D images and describe their spatial relationships, including proximity and layout.'"
+  prompt: "'Objective: Control a robot equipped with RGB-D sensors to locate {GOAL_NAME}
+            Strategy:
+              Take note all detected objects and their spatial relationships, including proximity and layout, based on depth information.
+              Commonsense reasoning about the relationship between target object and detected objects.
+            Task:
+              Locate the {GOAL_NAME}
+            Position:
+            You are at {ROBOT_POSITION}'"
   visualize_prompt: False
   evaluate: False
 
@@ -59,7 +66,7 @@ habitat_baselines:
       lr: 8.0e-4
       eps: 1e-5
       max_grad_norm: 0.2
-      num_steps: 128
+      num_steps: 64
       use_gae: True
       gamma: 0.99
       tau: 0.95
