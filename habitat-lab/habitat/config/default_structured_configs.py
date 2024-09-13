@@ -1897,6 +1897,7 @@ class DatasetConfig(HabitatBaseConfig):
     )
     # how many episodes to train for in scene
     train_eps: int = 20
+    max_replay_steps: int = 100
 
 
 @dataclass
