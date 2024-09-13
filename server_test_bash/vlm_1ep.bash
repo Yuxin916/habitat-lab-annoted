@@ -23,7 +23,7 @@ if [ "$num_gpus" -eq 1 ]; then
     python habitat-baselines/habitat_baselines/run.py \
     --config-name=objectnav/saved_config/vlm_rl_all_input.yaml \
     habitat.dataset.train_eps=1 \
-    habitat_baselines.num_environments=8 \
+    habitat_baselines.num_environments=4 \
     habitat_baselines.trainer_name=ddppo \
     habitat_baselines.log_interval=5 \
     habitat_baselines.rl.ppo.num_steps=64 \
@@ -33,6 +33,7 @@ if [ "$num_gpus" -eq 1 ]; then
     habitat_baselines.checkpoint_folder="ckpt/${LOG_DIR}/" \
     habitat_baselines.log_file="log/log/${LOG_DIR}.log" \
     habitat_baselines.prompt="'List all detected movable objects in provided home scene RGB-D images and describe their spatial relationships, including proximity and layout.'" \
+    habitat_baselines.visualize_prompt = True \
     habitat_baselines.evaluate=False
 
 else

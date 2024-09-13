@@ -115,7 +115,11 @@ class PointNavDatasetV1(Dataset):
         # 比如'/home/tsaisplus/mrs_llm/myproject/data/objectnav_hm3d_v2/val/val.json.gz'
         datasetfile_path = config.data_path.format(split=config.split)
 
-        self._load_from_file(datasetfile_path, config.scenes_dir)
+        # change to absolute path
+        datasetfile_path = os.path.abspath(datasetfile_path)
+        scenes_dir = os.path.abspath(config.scenes_dir)
+
+        self._load_from_file(datasetfile_path, scenes_dir)
 
         # Read separate file for each scene
         # folder 比如/home/tsaisplus/mrs_llm/Co-NavGPT/data/objectgoal_hm3d/val
