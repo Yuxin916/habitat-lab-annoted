@@ -40,6 +40,20 @@ if TYPE_CHECKING:
 ALL_SCENES_MASK = "*"
 
 
+@attr.s(auto_attribs=True, kw_only=True)
+class ObjectInScene:
+    object_id: int = attr.ib(default=None, validator=not_none_validator)
+    semantic_category_id: int = attr.ib(default=None)
+    object_template: str = attr.ib(default=None, validator=not_none_validator)
+    scale: float = attr.ib(default=None)
+    position: List[float] = attr.ib(default=None)
+    rotation: List[float] = attr.ib(default=None)
+
+
+@attr.s(auto_attribs=True, kw_only=True)
+class SceneState:
+    objects: List[ObjectInScene] = attr.ib(default=None)
+
 @attr.s(auto_attribs=True)
 class BaseEpisode:
     """

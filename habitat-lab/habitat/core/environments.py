@@ -18,7 +18,7 @@ import numpy as np
 
 import habitat
 from habitat import Dataset
-from habitat.gym.gym_wrapper import HabGymWrapper
+from habitat.gym.gym_wrapper import HabGymWrapper, ProcessDepthImage
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -124,5 +124,6 @@ class GymHabitatEnv(gym.Wrapper):
         self, config: "DictConfig", dataset: Optional[Dataset] = None
     ):
         base_env = RLTaskEnv(config=config, dataset=dataset)
-        env = HabGymWrapper(env=base_env)
+        # env = HabGymWrapper(env=base_env)
+        env = ProcessDepthImage(env=base_env)
         super().__init__(env)

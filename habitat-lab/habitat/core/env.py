@@ -110,6 +110,7 @@ class Env:
                 len(self._dataset.episodes) > 0
             ), "dataset should have non-empty episodes list"
 
+            self._dataset.episodes = [self._dataset.episodes[62]] + [self._dataset.episodes[293]]
             self._setup_episode_iterator()
             self.current_episode = next(self.episode_iterator)
             with read_write(self._config):
@@ -328,11 +329,11 @@ class Env:
         # 是否episode结束
         # 1. STOP动作被执行 - both linear/angular speed are below their threshold
         self._episode_over = not self._task.is_episode_active
-        # if self._episode_over:
-        #     print("DEBUG - env.py _update_step_stats -> STOP Called")
+        if self._episode_over:
+            print("DEBUG - env.py _update_step_stats -> STOP Called")
         # 是否超出episode的最大步数或者时间
         if self._past_limit():
-            # print("DEBUG - env.py _update_step_stats -> Past Limit")
+            print("DEBUG - env.py _update_step_stats -> Past Limit")
             self._episode_over = True
 
         if self.episode_iterator is not None and isinstance(

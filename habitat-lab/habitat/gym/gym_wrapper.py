@@ -323,18 +323,25 @@ class HabGymWrapper(gym.Wrapper):
         self, *args, return_info: bool = False, **kwargs
     ) -> Union[HabGymWrapperObsType, Tuple[HabGymWrapperObsType, dict]]:
         obs = self.env.reset(*args, return_info=return_info, **kwargs)
-        # single agent
+        if return_info:
+            # Unpack observation and info when return_info is True
+            obs, info = obs
+        else:
+            info = None  # No info is provided when return_info is False
+
+        self._last_obs = obs
+
+        # Ensure only single-agent environments are supported
         if len(obs) == 1:
+            # Unpack the observation for the single agent
             obs = obs[0]
         else:
-            raise NotImplementedError("Multi-agent environments not supported.")
-        if return_info:
-            obs, info = obs
-            self._last_obs = obs
-            return self._transform_obs(obs), info
-        else:
-            self._last_obs = obs
-            return self._transform_obs(obs)
+            raise NotImplementedError(
+                "Multi-agent environments are not supported.")
+
+        # Return transformed observation and info if available
+        transformed_obs = self._transform_obs(obs)
+        return (transformed_obs, info) if return_info else transformed_obs
 
     def render(self, mode: str = "human", **kwargs):
         last_infos = self.env.get_info(observations=None)
@@ -374,3 +381,47 @@ class HabGymWrapper(gym.Wrapper):
     @property
     def unwrapped(self) -> "RLEnv":
         return cast("RLEnv", self.env.unwrapped)
+
+class ProcessDepthImage(HabGymWrapper):
+    def _transform_obs(self, obs):
+        if self._save_orig_obs:
+            self.orig_obs = obs
+
+        observation = {
+            "observation": OrderedDict(
+                [(k, obs[k]) for k in self._gym_obs_keys]
+            )
+        }
+
+        if len(self._gym_goal_keys) > 0:
+            observation["desired_goal"] = OrderedDict(
+                [(k, obs[k]) for k in self._gym_goal_keys]
+            )
+
+        if len(self._gym_achieved_goal_keys) > 0:
+            observation["achieved_goal"] = OrderedDict(
+                [(k, obs[k]) for k in self._gym_achieved_goal_keys]
+            )
+
+        if KEYFRAME_OBSERVATION_KEY in obs:
+            observation[KEYFRAME_OBSERVATION_KEY] = obs[
+                KEYFRAME_OBSERVATION_KEY
+            ]
+
+        for k, v in observation.items():
+            if isinstance(self.observation_space, spaces.Box):
+                observation[k] = np.concatenate(list(v.values()))
+        if len(observation) == 1:
+            observation = observation["observation"]
+
+        # Process depth image
+        depth_image = observation["depth"]
+        # normalize the depth image
+        depth_image = (depth_image - np.min(depth_image)) / (
+            np.max(depth_image) - np.min(depth_image)
+        )
+        # rescale the depth image to [0, 255]
+        depth_image = (depth_image * 255).astype(np.uint8)
+
+        observation["depth"] = depth_image
+        return observation
