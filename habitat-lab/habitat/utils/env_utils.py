@@ -37,7 +37,7 @@ def make_env_fn(
     """
     temp change the dataset episode to only one episode
     """
-    dataset.episodes = dataset.episodes[:config.dataset.train_eps]
+    # dataset.episodes = dataset.episodes[:config.dataset.train_eps]
     logging.info(f"dataset.episodes: {len(dataset.episodes)}")
     # dataset.episodes = dataset.episodes[20:28]
     # for i in range(len(dataset.episodes)):

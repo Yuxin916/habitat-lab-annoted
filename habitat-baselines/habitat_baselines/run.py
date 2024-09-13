@@ -21,14 +21,18 @@ if TYPE_CHECKING:
     from omegaconf import DictConfig
 
 """
-train
---config-name=objectnav/saved_config/vlm_rl_all_input.yaml habitat_baselines.trainer_name=ddppo habitat_baselines.evaluate=False
+Working Directory:
+    habitat-lab/
 
-eval
---config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.num_environments=1 habitat_baselines.evaluate=True
+Command:
+    train
+    --config-name=objectnav/debug_for_env.yaml habitat_baselines.trainer_name=ddppo habitat_baselines.evaluate=False
 
-add HABITAT_ENV_DEBUG=1 to environment variables to enable debug logging
-HABITAT_ENV_DEBUG=1;GLOG_minloglevel=2;MAGNUM_LOG=quiet;HABITAT_SIM_LOG=quiet;HF_HOME=/home/tsaisplus/mrs_llm/myproject/spatial_bot_test
+    eval
+    --config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.num_environments=1 habitat_baselines.evaluate=True
+
+Environment Variables:
+    HABITAT_ENV_DEBUG=1;GLOG_minloglevel=2;MAGNUM_LOG=quiet;HABITAT_SIM_LOG=quiet;HF_HOME=../hf_spatialbot
 """
 
 @hydra.main(

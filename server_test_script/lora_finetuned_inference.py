@@ -5,7 +5,8 @@ from PIL import Image
 import warnings
 import numpy as np
 import time
-
+import json
+import shutil
 """
 This file contains quick start inference of SpatialBot-3B
 Used to test the installation of model, and inference speed
@@ -29,7 +30,24 @@ transformers.logging.disable_progress_bar()
 warnings.filterwarnings('ignore')
 
 # set model path
-model_name = '../hf_spatialbot/'
+model_name = '../merged_1pXnuDYAj8r/'
+with open(model_name + 'config.json', 'r') as file:
+    data = json.load(file)
+
+# Add the "auto_map" entry to the existing JSON data
+data["auto_map"] = {
+    "AutoConfig": "configuration_bunny_phi.BunnyPhiConfig",
+    "AutoModelForCausalLM": "modeling_bunny_phi.BunnyPhiForCausalLM"
+}
+
+# Write the modified data back to the JSON file
+with open(model_name + 'config.json', 'w') as file:
+    json.dump(data, file, indent=4)
+
+# copy "configuration_bunny_phi.py" and "modeling_bunny_phi.py" to the model directory from ../hf_spatialbot using python
+shutil.copy2('../hf_spatialbot/configuration_bunny_phi.py', model_name)
+shutil.copy2('../hf_spatialbot/modeling_bunny_phi.py', model_name)
+
 
 offset_bos = 0
 
@@ -48,7 +66,7 @@ tokenizer = AutoTokenizer.from_pretrained(
 
 # text prompt
 # prompt = "could the tv monitor be found in this scene? Justify your reasoning based on the objects present and the environment."
-prompt = "Describe spatial relationships of all detected movable objects as inferred from the depth image in one or two sentence."
+prompt = "You are an intelligent robot equipped with an RGB-D sensor, navigating a home scene environment. Your current task is to locate and navigate to the chair. Your available actions are: {move forward, turn left, turn right, look up, look down, stop}. Your response should be formatted as a valid JSON file, structured as follows: \n{\n\"observation\": \"{Describe spatial relationships of all detected movable objects as inferred from the depth image in one or two sentence.}\", \n\"thought\": \"{Would the chair be found in this scene? Why or why not? }\", \n\"action\": \"{Choose one of the admissible actions listed above. }\" \n}"
 
 text = (f"A chat between a curious user and an artificial intelligence assistant. "
         f"The assistant gives helpful, detailed, "
@@ -58,8 +76,10 @@ text_chunks = [tokenizer(chunk).input_ids for chunk in text.split('<image 1>\n<i
 
 input_ids = torch.tensor(text_chunks[0] + [-201] + [-202] + text_chunks[1][offset_bos:], dtype=torch.long).unsqueeze(0).to(model.device)
 
-image1 = Image.open('examples/images/20_episodes/32324_tv_monitor/images/rgb/0010.png')
-image2 = Image.open('examples/images/20_episodes/32324_tv_monitor/images/depth/0010.png')
+image1 = Image.open('examples/images/select_2/1pXnuDYAj8r/A1BZNPQ0H7ZSER:3JPSL1DZ5U2877WSMKVCE8TQK8HNAY_chair/images/rgb/0000.png')
+image2 = Image.open('examples/images/select_2/1pXnuDYAj8r/A1BZNPQ0H7ZSER:3JPSL1DZ5U2877WSMKVCE8TQK8HNAY_chair/images/depth/0000.png')
+
+# TODO: Now is just a very naive evaluation way, better loop with the sim
 
 channels = len(image2.getbands())
 if channels == 1:
