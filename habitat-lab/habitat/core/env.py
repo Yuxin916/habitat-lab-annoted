@@ -155,8 +155,6 @@ class Env:
         )
         # 一个episode的最大步数
         self._max_episode_steps = self._config.environment.max_episode_steps
-        # 一个episode的agent数量
-        self.num_agents = self._config.simulator.num_agents
 
         # 一些数据
         self._elapsed_steps = 0
