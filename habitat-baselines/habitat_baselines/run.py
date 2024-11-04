@@ -14,12 +14,25 @@ import torch
 from habitat.config.default import patch_config
 from habitat.config.default_structured_configs import register_hydra_plugin
 from habitat_baselines.config.default_structured_configs import (
-    HabitatBaselinesConfigPlugin,
+    HabitatBaselinesConfigPlugin, OutsidePointerConfig
 )
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
 
+"""
+Working Directory:
+    habitat-lab/
+
+Command:
+    train
+    --config-name=saved_configs/hm3d_baseline.yaml habitat.dataset.split=minival habitat.dataset.data_path=../data/datasets/objectnav/hm3d/v2/\{split\}/\{split\}.json.gz habitat.dataset.scenes_dir=../data/scene_datasets/ habitat_baselines.num_environments=8 habitat_baselines.tensorboard_dir=../log/tb/rl_baseline_minival habitat_baselines.video_dir=../log/video_dir/rl_baseline_minival habitat_baselines.checkpoint_folder=../log/checkpoints/rl_baseline_minival/ habitat_baselines.eval_ckpt_path_dir=../data/checkpoints/ habitat_baselines.log_file=../log/log/rl_baseline_minival.log habitat_baselines.evaluate=False
+    eval
+    --config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.num_environments=1 habitat_baselines.evaluate=True
+
+Environment Variables:
+    HABITAT_ENV_DEBUG=1;GLOG_minloglevel=2;MAGNUM_LOG=quiet;HABITAT_SIM_LOG=quiet;
+"""
 
 @hydra.main(
     version_base=None,
@@ -63,7 +76,8 @@ def execute_exp(config: "DictConfig", run_type: str) -> None:
 
 
 if __name__ == "__main__":
-    register_hydra_plugin(HabitatBaselinesConfigPlugin)
+    # register_hydra_plugin(HabitatBaselinesConfigPlugin)
+    register_hydra_plugin(OutsidePointerConfig)
     if "--exp-config" in sys.argv or "--run-type" in sys.argv:
         raise ValueError(
             "The API of run.py has changed to be compatible with hydra.\n"

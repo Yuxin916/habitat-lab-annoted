@@ -550,3 +550,15 @@ class HabitatBaselinesConfigPlugin(SearchPathPlugin):
             provider="habitat",
             path="pkg://habitat_baselines/config/",
         )
+
+class OutsidePointerConfig(SearchPathPlugin):
+    def manipulate_search_path(self, search_path: ConfigSearchPath) -> None:
+        # Print the current working directory for debugging purposes
+        # import os
+        # current_dir = os.getcwd()
+        # print(f"Current working directory: {current_dir}")
+
+        search_path.append(
+            provider="Tsaisplus",
+            path="file://../1_rl_train_notes"
+        )
