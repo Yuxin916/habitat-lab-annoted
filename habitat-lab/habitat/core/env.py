@@ -84,7 +84,12 @@ class Env:
             config = config.habitat
         self._config = config
         self._dataset = dataset
+        # 在没有dataset传进来的时候
+        # 根据config文件中的dataset配置，创建dataset
         if self._dataset is None and config.dataset.type:
+            # @registry.register_dataset(name="ObjectNav-v1")
+            # /habitat-lab/habitat-lab/habitat/datasets/object_nav/object_nav_dataset.py
+            # 获取self.episode
             self._dataset = make_dataset(
                 id_dataset=config.dataset.type, config=config.dataset
             )
@@ -102,36 +107,58 @@ class Env:
             self._setup_episode_iterator()
             self.current_episode = next(self.episode_iterator)
             with read_write(self._config):
-                self._config.simulator.scene_dataset = (
-                    self.current_episode.scene_dataset_config
-                )
+                # uncomment this line to enable scene dataset override in config
+                # self._config.simulator.scene_dataset = (
+                #     self.current_episode.scene_dataset_config
+                # )
                 self._config.simulator.scene = self.current_episode.scene_id
 
             self.number_of_episodes = len(self.episodes)
         else:
             self.number_of_episodes = None
 
+        # 通过config文件中的simulator配置，创建simulator
+        # 通过registry，创建simulator
+        # @registry.register_simulator(name="Sim-v0")
+        # /habitat-lab/habitat-lab/habitat/sims/habitat_simulator line 270
         self._sim = make_sim(
             id_sim=self._config.simulator.type, config=self._config.simulator
         )
 
+        # 通过config文件中的task配置，创建task
+        # 通过registry，创建task
+        # @registry.register_task(name="Nav-v0")
+        # /habitat-lab/habitat-lab/habitat/core/embodied_task.py
         self._task = make_task(
             self._config.task.type,
             config=self._config.task,
             sim=self._sim,
             dataset=self._dataset,
         )
+
+        # 合并sim和task的状态空间
+            # sim里面只包含RGB，Depth等sensor
+            # gps, compass等sensor在task里面
         self.observation_space = spaces.Dict(
             {
                 **self._sim.sensor_suite.observation_spaces.spaces,
                 **self._task.sensor_suite.observation_spaces.spaces,
             }
         )
+
+        # 从task中读取动作空间
         self.action_space = self._task.action_space
+
+        # 一个episode的最长时间 wallclock time
         self._max_episode_seconds = (
             self._config.environment.max_episode_seconds
         )
+        # 一个episode的最大步数
         self._max_episode_steps = self._config.environment.max_episode_steps
+        # 一个episode的agent数量
+        self.num_agents = self._config.simulator.num_agents
+
+        # 一些数据
         self._elapsed_steps = 0
         self._episode_start_time: Optional[float] = None
         self._episode_over = False
@@ -207,6 +234,7 @@ class Env:
 
     @property
     def task(self) -> EmbodiedTask:
+        # 指向EmbodiedTask
         return self._task
 
     @property
@@ -238,7 +266,10 @@ class Env:
 
         :return: initial observations from the environment.
         """
+        ############################################################
+        # reset一些数据 - episode开始时间，episode结束标志，episode步数
         self._reset_stats()
+        ############################################################
 
         # Delete the shortest path cache of the current episode
         # Caching it for the next time we see this episode isn't really worth
@@ -258,6 +289,8 @@ class Env:
         self._episode_force_changed = False
 
         assert self._current_episode is not None, "Reset requires an episode"
+
+        # 在每次reset环境的时候 覆盖_task里面的config
         self.reconfigure(self._config)
 
         observations = self.task.reset(episode=self.current_episode)
@@ -336,10 +369,15 @@ class Env:
         self._task.seed(seed)
 
     def reconfigure(self, config: "DictConfig") -> None:
+        # 在每次reset环境的时候
+        # 根据当前的episode信息
+        # 覆盖_task里面的config
+
         self._config = self._task.overwrite_sim_config(
             config, self.current_episode
         )
-
+        # habitat_simulator 根据当前的episode信息
+        # 更新sim_config和agent_state
         self._sim.reconfigure(self._config.simulator, self.current_episode)
 
     def render(self, mode="rgb") -> np.ndarray:
