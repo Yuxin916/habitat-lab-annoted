@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from typing import TYPE_CHECKING, Type, Union
-
+import logging
 from habitat.core.env import Env, RLEnv
 from habitat.datasets import make_dataset
 
@@ -34,6 +34,15 @@ def make_env_fn(
         config = config.habitat
     if dataset is None:
         dataset = make_dataset(config.dataset.type, config=config.dataset)
+    logging.info(f"Number of episodes: {dataset.num_episodes}")
+
+    # Extracting the part of the path that starts from "val/"
+    for scene in dataset.scene_ids:
+        start_index = scene.find('scene_datasets/')
+        if start_index != -1:
+            logging.info(scene[start_index:])
+
+    logging.info(f"Unique scene_ids: {dataset.scene_ids}")
     env = env_class(config=config, dataset=dataset)
     env.seed(config.seed)
     return env
