@@ -26,7 +26,7 @@ Working Directory:
 
 Command:
     train
-    --config-name=saved_configs/hm3d_baseline.yaml hydra.job.name=hm3d_baseline_minival habitat.dataset.split=minival habitat.dataset.data_path=../data/datasets/objectnav/hm3d/v2/\{split\}/\{split\}.json.gz habitat.dataset.scenes_dir=../data/scene_datasets/ habitat_baselines.num_environments=8 habitat_baselines.tensorboard_dir=../log/tb/rl_baseline_minival habitat_baselines.video_dir=../log/video_dir/rl_baseline_minival habitat_baselines.checkpoint_folder=../log/checkpoints/rl_baseline_minival/ habitat_baselines.eval_ckpt_path_dir=../data/checkpoints/ habitat_baselines.log_file=../log/log/rl_baseline_minival.log habitat_baselines.evaluate=False
+    --config-name=saved_configs/hm3d_baseline.yaml hydra.job.name=hm3d_baseline_minival habitat.dataset.split=minival habitat_baselines.num_environments=8 habitat_baselines.tensorboard_dir=../log/tb/rl_baseline_minival habitat_baselines.video_dir=../log/video_dir/rl_baseline_minival habitat_baselines.checkpoint_folder=../log/checkpoints/rl_baseline_minival/ habitat_baselines.eval_ckpt_path_dir=../data/checkpoints/ habitat_baselines.log_file=../log/log/rl_baseline_minival.log habitat_baselines.evaluate=False
     eval
     --config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.num_environments=1 habitat_baselines.evaluate=True
 

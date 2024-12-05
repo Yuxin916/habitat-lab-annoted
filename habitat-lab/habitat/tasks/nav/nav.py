@@ -600,12 +600,15 @@ class SPL(Measure):
 
         self._previous_position = current_position
 
-        self._metric = ep_success * (
-            self._start_end_episode_distance
-            / max(
-                self._start_end_episode_distance, self._agent_episode_distance
+        if self._start_end_episode_distance == 0:
+            self._metric = 0
+        else:
+            self._metric = ep_success * (
+                self._start_end_episode_distance
+                / max(
+                    self._start_end_episode_distance, self._agent_episode_distance
+                )
             )
-        )
 
 
 @registry.register_measure
@@ -637,9 +640,12 @@ class SoftSPL(SPL):
             DistanceToGoal.cls_uuid
         ].get_metric()
 
-        ep_soft_success = max(
-            0, (1 - distance_to_target / self._start_end_episode_distance)
-        )
+        if self._start_end_episode_distance == 0:
+            ep_soft_success = 0  # Or another default value, depending on the intended meaning
+        else:
+            ep_soft_success = max(
+                0, (1 - distance_to_target / self._start_end_episode_distance)
+            )
 
         self._agent_episode_distance += self._euclidean_distance(
             current_position, self._previous_position
@@ -647,12 +653,15 @@ class SoftSPL(SPL):
 
         self._previous_position = current_position
 
-        self._metric = ep_soft_success * (
-            self._start_end_episode_distance
-            / max(
-                self._start_end_episode_distance, self._agent_episode_distance
+        if self._start_end_episode_distance == 0:
+            self._metric = 0
+        else:
+            self._metric = ep_soft_success * (
+                self._start_end_episode_distance
+                / max(
+                    self._start_end_episode_distance, self._agent_episode_distance
+                )
             )
-        )
 
 
 @registry.register_measure
@@ -763,6 +772,10 @@ class TopDownMap(Measure):
     def _draw_goals_aabb(self, episode):
         if self._config.draw_goal_aabbs:
             for goal in episode.goals:
+                # idk why
+                # https://github.com/facebookresearch/habitat-lab/issues/1920
+                if int(goal.object_id) >= 65536:
+                    continue
                 try:
                     sem_scene = self._sim.semantic_annotations()
                     object_id = goal.object_id
