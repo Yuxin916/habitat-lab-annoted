@@ -6,6 +6,7 @@
 import random
 import sys
 from typing import TYPE_CHECKING
+from notes_data.utils.get_config import register_plugins
 
 import hydra
 import numpy as np
@@ -14,7 +15,7 @@ import torch
 from habitat.config.default import patch_config
 from habitat.config.default_structured_configs import register_hydra_plugin
 from habitat_baselines.config.default_structured_configs import (
-    HabitatBaselinesConfigPlugin, OutsidePointerConfig
+    HabitatBaselinesConfigPlugin
 )
 
 if TYPE_CHECKING:
@@ -83,8 +84,9 @@ def execute_exp(config: "DictConfig", run_type: str) -> None:
 
 
 if __name__ == "__main__":
-    # register_hydra_plugin(HabitatBaselinesConfigPlugin)
-    register_hydra_plugin(OutsidePointerConfig)
+    register_hydra_plugin(HabitatBaselinesConfigPlugin)
+    # register my custom plugin to hydra
+    register_plugins()
     if "--exp-config" in sys.argv or "--run-type" in sys.argv:
         raise ValueError(
             "The API of run.py has changed to be compatible with hydra.\n"
