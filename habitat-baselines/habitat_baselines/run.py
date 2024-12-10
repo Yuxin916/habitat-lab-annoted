@@ -7,6 +7,7 @@ import random
 import sys
 from typing import TYPE_CHECKING
 from notes_data.utils.get_config import register_plugins
+from notes_il_train.utils.get_config import register_plugins_baseline
 
 import hydra
 import numpy as np
@@ -69,12 +70,15 @@ def execute_exp(config: "DictConfig", run_type: str) -> None:
 
     from habitat_baselines.common.baseline_registry import baseline_registry
 
+    # get registered trainer
     trainer_init = baseline_registry.get_trainer(
         config.habitat_baselines.trainer_name
     )
     assert (
         trainer_init is not None
     ), f"{config.habitat_baselines.trainer_name} is not supported"
+
+    # initialize trainer
     trainer = trainer_init(config)
 
     if run_type == "train":
@@ -85,8 +89,10 @@ def execute_exp(config: "DictConfig", run_type: str) -> None:
 
 if __name__ == "__main__":
     register_hydra_plugin(HabitatBaselinesConfigPlugin)
-    # register my custom plugin to hydra
+    # register my custom plugin to hydra (habitat)
     register_plugins()
+    # regiser my custom plugin to hydra (habitat-baselines) BC
+    register_plugins_baseline()
     if "--exp-config" in sys.argv or "--run-type" in sys.argv:
         raise ValueError(
             "The API of run.py has changed to be compatible with hydra.\n"
