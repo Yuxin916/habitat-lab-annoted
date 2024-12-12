@@ -9,10 +9,14 @@ from typing import TYPE_CHECKING
 from notes_data.utils.get_config import register_plugins
 from notes_il_train.utils.get_config import register_plugins_baseline
 
+import os
 import hydra
+from omegaconf import open_dict
+from hydra.core.hydra_config import HydraConfig
 import numpy as np
 import torch
 
+from habitat.config.read_write import read_write
 from habitat.config.default import patch_config
 from habitat.config.default_structured_configs import register_hydra_plugin
 from habitat_baselines.config.default_structured_configs import (
@@ -28,13 +32,35 @@ Working Directory:
 
 Command:
     train
-    --config-name=saved_configs/hm3d_baseline.yaml hydra.job.name=hm3d_baseline_minival habitat.dataset.split=minival habitat_baselines.num_environments=8 habitat_baselines.tensorboard_dir=../log/tb/rl_baseline_minival habitat_baselines.video_dir=../log/video_dir/rl_baseline_minival habitat_baselines.checkpoint_folder=../log/checkpoints/rl_baseline_minival/ habitat_baselines.eval_ckpt_path_dir=../data/checkpoints/ habitat_baselines.log_file=../log/log/rl_baseline_minival.log habitat_baselines.evaluate=False
+        --config-name="mp3d_few_filtered_il_baseline_single_node.yaml"
+        --config-path="/home/tsaisplus/mrs_llm/vis_nav_v2/notes_il_train/configs/"
+        habitat_baselines.evaluate=False
     eval
-    --config-name=objectnav/ddppo_objectnav_hm3d.yaml habitat_baselines.trainer_name=ver habitat_baselines.num_environments=1 habitat_baselines.evaluate=True
 
 Environment Variables:
     HABITAT_ENV_DEBUG=1;GLOG_minloglevel=2;MAGNUM_LOG=quiet;HABITAT_SIM_LOG=quiet;
 """
+
+def patch_exp_name(cfg, hydra_cfg, exp_name):
+    with read_write(hydra_cfg):
+        hydra_cfg.run.dir = hydra_cfg.run.dir.format(exp_name=exp_name)
+        hydra_cfg.job.name = hydra_cfg.job.name.format(exp_name=exp_name)
+        hydra_cfg.runtime.output_dir = hydra_cfg.runtime.output_dir.format(exp_name=exp_name)
+
+    with read_write(cfg):
+        cfg.habitat_baselines.tensorboard_dir = cfg.habitat_baselines.tensorboard_dir.format(exp_name=exp_name)
+        cfg.habitat_baselines.video_dir = cfg.habitat_baselines.video_dir.format(exp_name=exp_name)
+        cfg.habitat_baselines.checkpoint_folder = cfg.habitat_baselines.checkpoint_folder.format(exp_name=exp_name)
+        cfg.habitat_baselines.log_file = cfg.habitat_baselines.log_file.format(exp_name=exp_name)
+
+    # Evaluation phase
+    if cfg.habitat_baselines.evaluate:
+        with read_write(cfg):
+            cfg.habitat_baselines.eval_ckpt_path_dir = cfg.habitat_baselines.eval_ckpt_path_dir.format(
+                exp_name=exp_name,
+                no=cfg.habitat_baselines.ckpt_no
+            )
+    return cfg
 
 @hydra.main(
     version_base=None,
@@ -42,14 +68,17 @@ Environment Variables:
     config_name="pointnav/ppo_pointnav_example",
 )
 def main(cfg: "DictConfig"):
-    # for debugging, print the working directory and output directory
-    # import os
-    # print(f"Working directory : {os.getcwd()}")
-    # print(hydra.core.hydra_config.HydraConfig.get().job.name)
-    # print(
-    #     f"Output directory  : {hydra.core.hydra_config.HydraConfig.get().runtime.output_dir}")
+
+    # get the config name you read and mark it as the experiment name for logging
+    hydra_cfg = HydraConfig.get()
+    config_name_with_ext = hydra_cfg.job.config_name
+    exp_name = os.path.splitext(config_name_with_ext)[0]
+
+    # insert the experiment name into the config
+    cfg = patch_exp_name(cfg, hydra_cfg, exp_name)
 
     cfg = patch_config(cfg)
+
     execute_exp(cfg, "eval" if cfg.habitat_baselines.evaluate else "train")
 
 
