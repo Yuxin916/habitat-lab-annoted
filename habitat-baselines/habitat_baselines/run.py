@@ -1,110 +1,25 @@
 #!/usr/bin/env python3
-import logging
 
 # Copyright (c) Meta Platforms, Inc. and its affiliates.
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
-# registered
-from notes_data.utils.get_config import register_plugins
-from notes_il_train.utils.get_config import register_plugins_baseline
-
-# common
-import os
-import hydra
-from hydra.core.hydra_config import HydraConfig
-import numpy as np
-import torch
 import random
 import sys
 from typing import TYPE_CHECKING
-from omegaconf import OmegaConf
-import shutil
 
-# habitat
-from habitat import logger
-from habitat.config.read_write import read_write
+import hydra
+import numpy as np
+import torch
+
 from habitat.config.default import patch_config
 from habitat.config.default_structured_configs import register_hydra_plugin
 from habitat_baselines.config.default_structured_configs import (
-    HabitatBaselinesConfigPlugin
+    HabitatBaselinesConfigPlugin,
 )
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
 
-"""
-Working Directory:
-    habitat-lab/
-
-Command:
-    IL:
-        train
-            --config-name="mp3d_few_filtered_il_baseline_single_node.yaml"
-            --config-path="/home/tsaisplus/mrs_llm/vis_nav_v2/notes_il_train/configs/"
-            habitat_baselines.evaluate=False
-        eval
-        # TODO
-
-Environment Variables:
-    HABITAT_ENV_DEBUG=1;GLOG_minloglevel=2;MAGNUM_LOG=quiet;HABITAT_SIM_LOG=quiet;
-"""
-
-def update_and_save_hydra_config(cfg):
-    """
-    Update Hydra config variables (e.g., exp_name) and save them in the correct directory.
-    """
-    hydra_cfg = HydraConfig.get()
-
-    # delete the {exp_name} folder
-    shutil.rmtree(os.path.join(*hydra_cfg.run.dir.split("/")[:-1], '{exp_name}'))
-
-    # Ensure the target directory exists
-    os.makedirs(hydra_cfg.run.dir, exist_ok=True)
-
-    # Save the updated configurations to the Hydra folder
-    hydra_folder = os.path.join(hydra_cfg.run.dir, ".hydra")
-    os.makedirs(hydra_folder, exist_ok=True)
-
-    # Save updated configs back to the files
-    OmegaConf.save(config=cfg, f=os.path.join(hydra_folder, "config.yaml"))
-    OmegaConf.save(config=hydra_cfg,
-                   f=os.path.join(hydra_folder, "hydra.yaml"))
-    OmegaConf.save(config=OmegaConf.create(hydra_cfg.overrides.task),
-                   f=os.path.join(hydra_folder, "overrides.yaml"))
-
-    logging.info(f"Hydra configuration updated and saved in {hydra_folder}")
-
-def patch_exp_name(cfg):
-    """
-    Patch experiment name to hydra, logging and evaluation ckpt
-    """
-    # get the config name you read and mark it as the experiment name for logging
-    hydra_cfg = HydraConfig.get()
-    config_name_with_ext = hydra_cfg.job.config_name
-    exp_name = os.path.splitext(config_name_with_ext)[0]
-
-    logger.info('Experiment Name: {}'.format(exp_name))
-
-    with read_write(hydra_cfg):
-        hydra_cfg.run.dir = hydra_cfg.run.dir.format(exp_name=exp_name)
-        hydra_cfg.job.name = hydra_cfg.job.name.format(exp_name=exp_name)
-        hydra_cfg.runtime.output_dir = hydra_cfg.runtime.output_dir.format(exp_name=exp_name)
-
-    with read_write(cfg):
-        cfg.habitat_baselines.tensorboard_dir = cfg.habitat_baselines.tensorboard_dir.format(exp_name=exp_name)
-        cfg.habitat_baselines.video_dir = cfg.habitat_baselines.video_dir.format(exp_name=exp_name)
-        cfg.habitat_baselines.checkpoint_folder = cfg.habitat_baselines.checkpoint_folder.format(exp_name=exp_name)
-        cfg.habitat_baselines.log_file = cfg.habitat_baselines.log_file.format(exp_name=exp_name)
-
-    # Evaluation phase
-    if cfg.habitat_baselines.evaluate:
-        with read_write(cfg):
-            cfg.habitat_baselines.eval_ckpt_path_dir = cfg.habitat_baselines.eval_ckpt_path_dir.format(
-                exp_name=exp_name,
-                no=cfg.habitat_baselines.ckpt_no
-            )
-    return cfg
 
 @hydra.main(
     version_base=None,
@@ -112,18 +27,7 @@ def patch_exp_name(cfg):
     config_name="pointnav/ppo_pointnav_example",
 )
 def main(cfg: "DictConfig"):
-
-    # insert the experiment name into the config
-    cfg = patch_exp_name(cfg)
-
-    # Modifies a configuration by inferring some missing keys
-    # and makes sure some keys are present and compatible with each other.
     cfg = patch_config(cfg)
-
-    # update the new cfg to hydra logging
-    update_and_save_hydra_config(cfg)
-
-    # start the exp
     execute_exp(cfg, "eval" if cfg.habitat_baselines.evaluate else "train")
 
 
@@ -133,31 +37,23 @@ def execute_exp(config: "DictConfig", run_type: str) -> None:
     config: Habitat.config
     runtype: str {train or eval}
     """
-    # set seed
     random.seed(config.habitat.seed)
     np.random.seed(config.habitat.seed)
     torch.manual_seed(config.habitat.seed)
-
-    # limit PyTorch to using a single thread
     if (
         config.habitat_baselines.force_torch_single_threaded
         and torch.cuda.is_available()
     ):
         torch.set_num_threads(1)
 
-    # get all registered objects
     from habitat_baselines.common.baseline_registry import baseline_registry
 
-    # get registered trainer
     trainer_init = baseline_registry.get_trainer(
         config.habitat_baselines.trainer_name
     )
     assert (
         trainer_init is not None
     ), f"{config.habitat_baselines.trainer_name} is not supported"
-    logger.info('Trainer Name: {}, Initialized'.format(config.habitat_baselines.trainer_name))
-
-    # initialize trainer
     trainer = trainer_init(config)
 
     if run_type == "train":
@@ -168,10 +64,6 @@ def execute_exp(config: "DictConfig", run_type: str) -> None:
 
 if __name__ == "__main__":
     register_hydra_plugin(HabitatBaselinesConfigPlugin)
-    # register my custom plugin to hydra (habitat)
-    register_plugins()
-    # regiser my custom plugin to hydra (habitat-baselines) BC
-    register_plugins_baseline()
     if "--exp-config" in sys.argv or "--run-type" in sys.argv:
         raise ValueError(
             "The API of run.py has changed to be compatible with hydra.\n"

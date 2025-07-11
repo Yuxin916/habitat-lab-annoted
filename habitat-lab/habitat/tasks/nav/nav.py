@@ -772,10 +772,10 @@ class TopDownMap(Measure):
     def _draw_goals_aabb(self, episode):
         if self._config.draw_goal_aabbs:
             for goal in episode.goals:
-                # idk why
-                # https://github.com/facebookresearch/habitat-lab/issues/1920
-                if int(goal.object_id) >= 65536:
-                    continue
+                # # idk why
+                # # https://github.com/facebookresearch/habitat-lab/issues/1920
+                # if int(goal.object_id) >= 65536:
+                #     continue
                 try:
                     sem_scene = self._sim.semantic_annotations()
                     object_id = goal.object_id
@@ -785,7 +785,7 @@ class TopDownMap(Measure):
                         goal.object_id
                     ), f"Object_id doesn't correspond to id in semantic scene objects dictionary for episode: {episode}"
 
-                    center = sem_scene.objects[object_id].aabb.center
+                    center = sem_scene.objects[object_id].aabb.center()
                     x_len, _, z_len = (
                         sem_scene.objects[object_id].aabb.sizes / 2.0
                     )
