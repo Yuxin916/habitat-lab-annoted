@@ -107,9 +107,10 @@ class Env:
             self._setup_episode_iterator()
             self.current_episode = next(self.episode_iterator)
             with read_write(self._config):
-                self._config.simulator.scene_dataset = (
-                    self.current_episode.scene_dataset_config
-                )
+                # comment this line because need to enable scene dataset override in config
+                # self._config.simulator.scene_dataset = (
+                #     self.current_episode.scene_dataset_config
+                # )
                 self._config.simulator.scene = self.current_episode.scene_id
 
             self.number_of_episodes = len(self.episodes)
