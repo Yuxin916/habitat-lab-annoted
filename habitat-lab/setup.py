@@ -4,14 +4,34 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-
 from setuptools import find_packages, setup
+from pathlib import Path
+
+# Directory containing this setup.py
+_HERE = Path(__file__).resolve().parent
+
+# Safely resolve README.md next to this setup.py.
+# If it's missing (e.g. in build dir), just use an empty description.
+try:
+    _readme_path = _HERE / "README.md"
+    if _readme_path.is_file():
+        LONG_DESCRIPTION = _readme_path.read_text(encoding="utf8")
+    else:
+        LONG_DESCRIPTION = ""
+except Exception:
+    LONG_DESCRIPTION = ""
 
 
-def read(file_path, *args, **kwargs):
-    with open(file_path, *args, **kwargs) as f:
-        content = f.read()
-    return content
+# Safely resolve requirements.txt next to this setup.py.
+# If it's missing, fall back to an empty list.
+try:
+    _req_path = _HERE / "requirements.txt"
+    if _req_path.is_file():
+        INSTALL_REQUIRES = _req_path.read_text(encoding="utf8").strip().splitlines()
+    else:
+        INSTALL_REQUIRES = []
+except Exception:
+    INSTALL_REQUIRES = []
 
 
 def get_package_version():
@@ -56,12 +76,16 @@ For documentation refer [here](https://aihabitat.org/docs/habitat-lab/).
 if __name__ == "__main__":
     setup(
         name="habitat-lab",
-        install_requires=read("requirements.txt").strip().split("\n"),
+        install_requires=INSTALL_REQUIRES,
         packages=find_packages(),
         version=get_package_version(),
         include_package_data=True,
-        description="Habitat-Lab: a modular high-level library for end-to-end development in Embodied AI.",
-        long_description=get_long_description(),
+        description=(
+            "Habitat-Lab: a modular high-level library for end-to-end "
+            "development in Embodied AI."
+        ),
+        # long_description=get_long_description(),
+        long_description=LONG_DESCRIPTION,
         long_description_content_type="text/markdown",
         author="Meta AI Research",
         license="MIT License",

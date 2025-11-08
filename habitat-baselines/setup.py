@@ -7,7 +7,19 @@
 import glob
 
 from setuptools import find_packages, setup
+from pathlib import Path
 
+# Safely resolve README.md next to this setup.py.
+# If it's missing (e.g. in build dir), just use an empty description.
+try:
+    _here = Path(__file__).resolve().parent
+    _readme_path = _here / "README.md"
+    if _readme_path.is_file():
+        LONG_DESCRIPTION = _readme_path.read_text(encoding="utf8")
+    else:
+        LONG_DESCRIPTION = ""
+except Exception:
+    LONG_DESCRIPTION = ""
 
 def read(file_path, *args, **kwargs):
     with open(file_path, *args, **kwargs) as f:
@@ -45,7 +57,8 @@ if __name__ == "__main__":
         version=get_package_version(),
         include_package_data=True,
         description="Habitat-Baselines: Embodied AI baselines.",
-        long_description=read("README.md", encoding="utf8"),
+        # long_description=read("README.md", encoding="utf8"),
+        long_description=LONG_DESCRIPTION,
         long_description_content_type="text/markdown",
         author="Meta AI Research",
         license="MIT License",
