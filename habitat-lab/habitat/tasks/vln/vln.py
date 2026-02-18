@@ -8,7 +8,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+
 
 import attr
 from gym import spaces
@@ -16,7 +17,7 @@ from gym import spaces
 from habitat.core.registry import registry
 from habitat.core.simulator import Observations, Sensor
 from habitat.core.utils import not_none_validator
-from habitat.tasks.nav.nav import NavigationEpisode, NavigationTask
+from habitat.tasks.nav.nav import NavigationEpisode, NavigationTask, NavigationGoal
 
 
 @attr.s(auto_attribs=True)
@@ -90,3 +91,26 @@ class VLNTask(NavigationTask):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
+
+@attr.s(auto_attribs=True)
+class ExtendedInstructionData:
+    instruction_text: str = attr.ib(default=None, validator=not_none_validator)
+    instruction_id: Optional[str] = attr.ib(default=None)
+    language: Optional[str] = attr.ib(default=None)
+    annotator_id: Optional[str] = attr.ib(default=None)
+    edit_distance: Optional[float] = attr.ib(default=None)
+    timed_instruction: Optional[List[Dict[str, Union[float, str]]]] = attr.ib(
+        default=None
+    )
+    instruction_tokens: Optional[List[str]] = attr.ib(default=None)
+    split: Optional[str] = attr.ib(default=None)
+
+
+@attr.s(auto_attribs=True, kw_only=True)
+class VLNExtendedEpisode(VLNEpisode):
+    goals: Optional[List[NavigationGoal]] = attr.ib(default=None)
+    reference_path: Optional[List[List[float]]] = attr.ib(default=None)
+    instruction: ExtendedInstructionData = attr.ib(
+        default=None, validator=not_none_validator
+    )
+    trajectory_id: Optional[Union[int, str]] = attr.ib(default=None)
